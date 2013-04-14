@@ -224,7 +224,7 @@ public class AudioActivity extends MediaPhoneActivity {
 				case PLAY_AUDIO:
 					// deleted the picture (media item already set deleted) - update the icon
 					if (mHasEditedMedia) {
-						runImmediateBackgroundTask(getFrameIconUpdaterRunnable(audioMediaItem.getParentId()));
+						runQueuedBackgroundTask(getFrameIconUpdaterRunnable(audioMediaItem.getParentId()));
 					}
 					break;
 
@@ -237,7 +237,7 @@ public class AudioActivity extends MediaPhoneActivity {
 						if (audioMediaItem.getFile().length() > 0) {
 							// recorded new audio (rather than just cancelling the recording) - update the icon
 							if (mHasEditedMedia) {
-								runImmediateBackgroundTask(getFrameIconUpdaterRunnable(audioMediaItem.getParentId()));
+								runQueuedBackgroundTask(getFrameIconUpdaterRunnable(audioMediaItem.getParentId()));
 								setBackButtonIcons(AudioActivity.this, R.id.button_finished_audio,
 										R.id.button_cancel_recording, true);
 

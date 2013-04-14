@@ -151,7 +151,7 @@ public class TextActivity extends MediaPhoneActivity {
 
 		final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(), mMediaItemInternalId);
 		if (textMediaItem != null) {
-			saveCurrentText(textMediaItem);
+			saveCurrentText(textMediaItem, true);
 			saveLastEditedFrame(textMediaItem.getParentId());
 		}
 
@@ -195,7 +195,7 @@ public class TextActivity extends MediaPhoneActivity {
 			case R.id.menu_add_frame:
 				final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
-				if (textMediaItem != null && saveCurrentText(textMediaItem)) {
+				if (textMediaItem != null && saveCurrentText(textMediaItem, false)) {
 					runQueuedBackgroundTask(getFrameSplitterRunnable(mMediaItemInternalId));
 				} else {
 					UIUtilities.showToast(TextActivity.this, R.string.split_text_add_content);
@@ -265,6 +265,8 @@ public class TextActivity extends MediaPhoneActivity {
 		// load any existing text
 		final MediaItem textMediaItem = MediaManager.findMediaByInternalId(contentResolver, mMediaItemInternalId);
 		if (textMediaItem != null) {
+			updateSpanFramesButtonIcon(R.id.button_toggle_mode_text, textMediaItem.getSpanFrames()); // show span state
+
 			if (TextUtils.isEmpty(mEditText.getText().toString())) { // don't delete existing (i.e. changed) content
 				mEditText.setText(IOUtilities.getFileContents(textMediaItem.getFile().getAbsolutePath()).toString());
 			}
@@ -285,7 +287,7 @@ public class TextActivity extends MediaPhoneActivity {
 		}
 	}
 
-	private boolean saveCurrentText(MediaItem textMediaItem) {
+	private boolean saveCurrentText(MediaItem textMediaItem, boolean updateIcon) {
 		String mediaText = mEditText.getText().toString();
 		if (!TextUtils.isEmpty(mediaText)) {
 			if (mHasEditedMedia) {
@@ -295,13 +297,18 @@ public class TextActivity extends MediaPhoneActivity {
 					fileOutputStream.write(mediaText.getBytes());
 					fileOutputStream.flush(); // does nothing in FileOutputStream
 				} catch (Throwable t) {
-					return false;
+					return false; // no need to update the icon - nothing has changed
 				} finally {
 					IOUtilities.closeStream(fileOutputStream);
 				}
 
-				// update the icon
-				runImmediateBackgroundTask(getFrameIconUpdaterRunnable(textMediaItem.getParentId()));
+				// update the icon (no need if not mHasEditedMedia)
+				if (updateIcon) {
+					runQueuedBackgroundTask(getFrameIconUpdaterRunnable(textMediaItem.getParentId()));
+					if (textMediaItem.getSpanFrames()) {
+						updateSpanningMediaFrameIcons(textMediaItem);
+					}
+				}
 			}
 			return true;
 		} else {
@@ -310,7 +317,12 @@ public class TextActivity extends MediaPhoneActivity {
 			MediaManager.updateMedia(getContentResolver(), textMediaItem);
 
 			// update the icon to remove the text
-			runImmediateBackgroundTask(getFrameIconUpdaterRunnable(textMediaItem.getParentId()));
+			if (updateIcon) {
+				runQueuedBackgroundTask(getFrameIconUpdaterRunnable(textMediaItem.getParentId()));
+				if (textMediaItem.getSpanFrames()) {
+					updateSpanningMediaFrameIcons(textMediaItem);
+				}
+			}
 			return false;
 		}
 	}
@@ -354,6 +366,22 @@ public class TextActivity extends MediaPhoneActivity {
 		switch (currentButton.getId()) {
 			case R.id.button_finished_text:
 				onBackPressed();
+				break;
+
+			case R.id.button_toggle_mode_text:
+				// TODO: only relevant for text, but if they update text, set spanning, then update text again we end up
+				// updating all following frame icons twice, which is unnecessary. Could track whether they've entered
+				// text after toggling frame spanning, but this may be overkill for a situation that rarely happens?
+				final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
+						mMediaItemInternalId);
+				if (textMediaItem != null && saveCurrentText(textMediaItem, false)) {
+					boolean frameSpanning = toggleFrameSpanningMedia(mMediaItemInternalId);
+					updateSpanFramesButtonIcon(R.id.button_toggle_mode_text, frameSpanning);
+					UIUtilities.showToast(TextActivity.this, frameSpanning ? R.string.span_text_multiple_frames
+							: R.string.span_text_single_frame);
+				} else {
+					UIUtilities.showToast(TextActivity.this, R.string.span_text_add_content);
+				}
 				break;
 
 			case R.id.button_delete_text:

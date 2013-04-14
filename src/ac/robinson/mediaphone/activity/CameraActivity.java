@@ -216,7 +216,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 				case DISPLAY_PICTURE:
 					// deleted the picture (media item already set deleted) - update the icon
 					if (mHasEditedMedia) {
-						runImmediateBackgroundTask(getFrameIconUpdaterRunnable(imageMediaItem.getParentId()));
+						runQueuedBackgroundTask(getFrameIconUpdaterRunnable(imageMediaItem.getParentId()));
 					}
 					break;
 
@@ -224,7 +224,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 					if (imageMediaItem.getFile().length() > 0) {
 						// took a new picture (rather than just cancelling the camera) - update the icon
 						if (mHasEditedMedia) {
-							runImmediateBackgroundTask(getFrameIconUpdaterRunnable(imageMediaItem.getParentId()));
+							runQueuedBackgroundTask(getFrameIconUpdaterRunnable(imageMediaItem.getParentId()));
 							setBackButtonIcons(CameraActivity.this, R.id.button_finished_picture, 0, true);
 
 							// if we do this then we can't tell whether to change icons on screen rotation; disabled

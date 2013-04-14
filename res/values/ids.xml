@@ -53,6 +53,7 @@
     <item name="uri_narratives" type="id"/>
     <item name="uri_frames" type="id"/>
     <item name="uri_media" type="id"/>
+    <item name="uri_media_links" type="id"/>
     <item name="uri_templates" type="id"/>
 
     <!-- loader results -->

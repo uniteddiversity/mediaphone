@@ -196,7 +196,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	public boolean onCreateOptionsMenu(Menu menu) {
 		// TODO: if we couldn't open a temporary directory then exporting won't work
 		MenuInflater inflater = getMenuInflater();
-		setupMenuNavigationButtons(inflater, menu, mFrameInternalId, mHasEditedMedia);
+		setupMenuNavigationButtons(inflater, menu, mFrameInternalId, mHasEditedMedia, false);
 		inflater.inflate(R.menu.play_narrative, menu);
 		inflater.inflate(R.menu.make_template, menu);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {

@@ -44,7 +44,7 @@ public class MediaPhoneProvider extends ContentProvider {
 
 	public static final String URI_AUTHORITY = MediaPhone.APPLICATION_NAME;
 	private static final String DATABASE_NAME = URI_AUTHORITY + ".db";
-	private static final int DATABASE_VERSION = 1;
+	private static final int DATABASE_VERSION = 2;
 
 	public static final String URI_PREFIX = "content://";
 	public static final String URI_SEPARATOR = File.separator;
@@ -53,6 +53,7 @@ public class MediaPhoneProvider extends ContentProvider {
 	public static final String NARRATIVES_LOCATION = "narratives";
 	public static final String FRAMES_LOCATION = "frames";
 	public static final String MEDIA_LOCATION = "media";
+	public static final String MEDIA_LINKS_LOCATION = "media_links";
 	public static final String TEMPLATES_LOCATION = "templates";
 
 	// NOTE: these are *not* the same as the MediaTablet type classifiers
@@ -68,6 +69,7 @@ public class MediaPhoneProvider extends ContentProvider {
 		URI_MATCHER.addURI(URI_AUTHORITY, NARRATIVES_LOCATION, R.id.uri_narratives);
 		URI_MATCHER.addURI(URI_AUTHORITY, FRAMES_LOCATION, R.id.uri_frames);
 		URI_MATCHER.addURI(URI_AUTHORITY, MEDIA_LOCATION, R.id.uri_media);
+		URI_MATCHER.addURI(URI_AUTHORITY, MEDIA_LINKS_LOCATION, R.id.uri_media_links);
 		URI_MATCHER.addURI(URI_AUTHORITY, TEMPLATES_LOCATION, R.id.uri_templates);
 	}
 
@@ -97,6 +99,9 @@ public class MediaPhoneProvider extends ContentProvider {
 			case R.id.uri_media:
 				qb.setTables(MEDIA_LOCATION);
 				break;
+			case R.id.uri_media_links:
+				qb.setTables(MEDIA_LINKS_LOCATION);
+				break;
 			case R.id.uri_templates:
 				qb.setTables(TEMPLATES_LOCATION);
 				break;
@@ -124,6 +129,7 @@ public class MediaPhoneProvider extends ContentProvider {
 			case R.id.uri_narratives:
 			case R.id.uri_frames:
 			case R.id.uri_media:
+			case R.id.uri_media_links:
 			case R.id.uri_templates:
 				return "vnd.android.cursor.dir/vnd." + URI_PACKAGE; // do these need to be unique?
 			default:
@@ -158,6 +164,10 @@ public class MediaPhoneProvider extends ContentProvider {
 				rowId = db.insert(MEDIA_LOCATION, null, values);
 				contentUri = MediaItem.CONTENT_URI;
 				break;
+			case R.id.uri_media_links:
+				rowId = db.insert(MEDIA_LINKS_LOCATION, null, values);
+				contentUri = MediaItem.CONTENT_URI_LINK;
+				break;
 			case R.id.uri_templates:
 				rowId = db.insert(TEMPLATES_LOCATION, null, values);
 				contentUri = NarrativeItem.TEMPLATE_CONTENT_URI;
@@ -186,6 +196,9 @@ public class MediaPhoneProvider extends ContentProvider {
 				break;
 			case R.id.uri_media:
 				count = db.delete(MEDIA_LOCATION, selectionClause, selectionArgs);
+				break;
+			case R.id.uri_media_links:
+				count = db.delete(MEDIA_LINKS_LOCATION, selectionClause, selectionArgs);
 				break;
 			case R.id.uri_templates:
 				count = db.delete(TEMPLATES_LOCATION, selectionClause, selectionArgs);
@@ -222,6 +235,9 @@ public class MediaPhoneProvider extends ContentProvider {
 				break;
 			case R.id.uri_media:
 				rowsAffected = db.update(MEDIA_LOCATION, values, selectionClause, selectionArgs);
+				break;
+			case R.id.uri_media_links:
+				rowsAffected = db.update(MEDIA_LINKS_LOCATION, values, selectionClause, selectionArgs);
 				break;
 			case R.id.uri_templates:
 				rowsAffected = db.update(TEMPLATES_LOCATION, values, selectionClause, selectionArgs);
@@ -283,11 +299,14 @@ public class MediaPhoneProvider extends ContentProvider {
 					+ MediaItem.FILE_EXTENSION + " TEXT, " // the file extension of this media item
 					+ MediaItem.DURATION + " INTEGER, " // the duration of this media item
 					+ MediaItem.DATE_CREATED + " INTEGER, " // the timestamp when this media item was created
+					+ MediaItem.SPAN_FRAMES + " INTEGER, " // whether this media item spans multiple frames
 					+ MediaItem.DELETED + " INTEGER);"); // whether this media item has been deleted
 			db.execSQL("CREATE INDEX " + MEDIA_LOCATION + "Index" + MediaItem.INTERNAL_ID + " ON " + MEDIA_LOCATION
 					+ "(" + MediaItem.INTERNAL_ID + ");");
 			db.execSQL("CREATE INDEX " + MEDIA_LOCATION + "Index" + MediaItem.PARENT_ID + " ON " + MEDIA_LOCATION + "("
 					+ MediaItem.PARENT_ID + ");");
+
+			createMediaLinksTable(db);
 
 			db.execSQL("CREATE TABLE " + TEMPLATES_LOCATION + " (" //
 					+ NarrativeItem._ID + " INTEGER PRIMARY KEY, " // required for Android Adapters
@@ -299,13 +318,33 @@ public class MediaPhoneProvider extends ContentProvider {
 					+ TEMPLATES_LOCATION + "(" + NarrativeItem.INTERNAL_ID + ");");
 		}
 
+		// in a separate function as it's used in both upgrade and creation
+		private void createMediaLinksTable(SQLiteDatabase db) {
+			db.execSQL("CREATE TABLE " + MEDIA_LINKS_LOCATION + " (" //
+					+ MediaItem._ID + " INTEGER PRIMARY KEY, " // required for Android Adapters
+					+ MediaItem.INTERNAL_ID + " TEXT, " // the GUID of the linked media item
+					+ MediaItem.PARENT_ID + " TEXT, " // the GUID of the parent this media item is linked to
+					+ MediaItem.DELETED + " INTEGER);"); // whether this link has been deleted
+			db.execSQL("CREATE INDEX " + MEDIA_LINKS_LOCATION + "Index" + MediaItem.INTERNAL_ID + " ON "
+					+ MEDIA_LINKS_LOCATION + "(" + MediaItem.INTERNAL_ID + ");");
+			db.execSQL("CREATE INDEX " + MEDIA_LINKS_LOCATION + "Index" + MediaItem.PARENT_ID + " ON "
+					+ MEDIA_LINKS_LOCATION + "(" + MediaItem.PARENT_ID + ");");
+		}
+
 		@Override
 		public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
 			if (MediaPhone.DEBUG) {
 				Log.d(DebugUtilities.getLogTag(this), "Database upgrade requested from version " + oldVersion + " to "
-						+ newVersion + " - ignoring.");
+						+ newVersion);
 			}
-			// backup database if necessary
+
+			// TODO: backup database if necessary (also: check for read only database?)
+			switch (newVersion) {
+				case 2:
+					db.execSQL("ALTER TABLE " + MEDIA_LOCATION + " ADD COLUMN " + MediaItem.SPAN_FRAMES + " INTEGER;");
+					createMediaLinksTable(db);
+					break;
+			}
 		}
 
 		@Override
@@ -314,7 +353,6 @@ public class MediaPhoneProvider extends ContentProvider {
 				Log.d(DebugUtilities.getLogTag(this), "Database downgrade requested from version " + oldVersion
 						+ " to " + newVersion + " - ignoring.");
 			}
-			// backup database if necessary
 		}
 	}
 }

@@ -108,7 +108,7 @@ public class FramesManager {
 	}
 
 	/**
-	 * Note: to delete a frame item, do setDeleted the item itself and then update to the database. On the next
+	 * Note: to delete a frame item, do setDeleted on the item itself and then update to the database. On the next
 	 * application launch, the frame's media files will be deleted and the database entry will be cleaned up. This
 	 * approach speeds up interaction and means that we only need one background thread semi-regularly for deletion
 	 */

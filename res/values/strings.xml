@@ -67,6 +67,9 @@
     <string name="delete_text_hint">All the text on this frame will be permanently deleted</string>
     <string name="delete_text_succeeded">The text has been deleted</string>
     <string name="split_text_add_content">Please add text before creating a new frame</string>
+    <string name="span_text_add_content">Please add text before making it show on other frames</string>
+    <string name="span_text_multiple_frames">This text will now show on following frames</string>
+    <string name="span_text_single_frame">This text will now only show on this frame</string>
 
     <!-- image editor -->
     <string name="error_loading_image_editor">Error loading image editor – please try again</string>

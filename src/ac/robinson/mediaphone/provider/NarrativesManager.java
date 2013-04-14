@@ -67,9 +67,9 @@ public class NarrativesManager {
 	}
 
 	/**
-	 * Note: to delete an item, do setDeleted the item itself and then update to the database. On the next application
-	 * launch, the item's frames and media files will be deleted and the database entry will be cleaned up. This
-	 * approach speeds up interaction and means that we only need one background thread semi-regularly for deletion
+	 * Note: to delete an item, do setDeleted on the item itself and then update to the database. On the next
+	 * application launch, the item's frames and media files will be deleted and the database entry will be cleaned up.
+	 * This approach speeds up interaction and means that we only need one background thread semi-regularly for deletion
 	 */
 	public static boolean deleteTemplateFromBackgroundTask(ContentResolver contentResolver, String internalId) {
 		return deleteItemFromBackgroundTask(NarrativeItem.TEMPLATE_CONTENT_URI, contentResolver, internalId);
