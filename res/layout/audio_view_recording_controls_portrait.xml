@@ -23,7 +23,7 @@
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@drawable/ic_menu_audio" />
+            android:drawableTop="@drawable/ic_action_import_music" />
     </LinearLayout>
 
 </merge>

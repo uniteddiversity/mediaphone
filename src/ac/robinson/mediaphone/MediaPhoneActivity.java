@@ -840,7 +840,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	}
 
 	/**
-	 * Returns a list of the frame ids following the given frame id
+	 * Returns a list of the frame ids following (but not including) the given frame id
 	 * 
 	 * @param frameId
 	 */
@@ -912,6 +912,54 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				break;
 			}
 		}
+	}
+
+	/**
+	 * Removes the link to the media item with mediaId from startFrameId and all frames following - used when replacing
+	 * a linked media item with a new item
+	 * 
+	 * @param mediaId
+	 * @param startFrameId
+	 */
+	protected void endLinkedMediaItem(String mediaId, String startFrameId) {
+		// we only need the parent ids of frames after (not including) the current one
+		ContentResolver contentResolver = getContentResolver();
+		ArrayList<String> narrativeFrameIds = getFollowingFrameIds(startFrameId);
+		if (narrativeFrameIds == null) {
+			return;
+		}
+
+		// now remove the media link from all of these frames
+		for (String frameId : narrativeFrameIds) {
+			// need to check all following frames until we find one that doesn't link to this item
+			ArrayList<String> frameMedia = MediaManager.findMediaIdsByParentId(contentResolver, frameId);
+			boolean mediaFound = false;
+			for (String media : frameMedia) {
+				if (mediaId.equals(media)) {
+					mediaFound = true; // TODO: should we deal with audio differently?
+					break;
+				}
+			}
+
+			// remove the media link and queue updating icons for changed frames; remove frames that are now blank
+			if (mediaFound) {
+				MediaManager.deleteMediaLink(contentResolver, frameId, mediaId);
+				if (MediaManager.countMediaByParentId(contentResolver, frameId, false) > 0) {
+					runQueuedBackgroundTask(getFrameIconUpdaterRunnable(frameId)); // queued; updating isn't thread safe
+				} else {
+					FrameItem frameToDelete = FramesManager.findFrameByInternalId(contentResolver, frameId);
+					frameToDelete.setDeleted(true);
+					FramesManager.updateFrame(contentResolver, frameToDelete);
+				}
+			} else {
+				break;
+			}
+		}
+
+		// the current media item is a special case - we do it separately because we don't want to accidentally delete
+		// the frame if its only current content is the inherited item; there's also no need to update the icon because
+		// if they do edit we'll update automatically; if they don't then we'll have to undo all these changes...
+		MediaManager.deleteMediaLink(contentResolver, startFrameId, mediaId);
 	}
 
 	/**

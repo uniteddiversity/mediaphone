@@ -1216,7 +1216,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 
 		// animate rotating the button icons
 		Resources res = getResources();
-		animateButtonRotation(res, animation, R.id.button_take_picture, android.R.drawable.ic_menu_camera,
+		animateButtonRotation(res, animation, R.id.button_take_picture, R.drawable.ic_action_camera,
 				mIconRotation);
 		animateButtonRotation(res, animation, R.id.button_import_image, android.R.drawable.ic_menu_gallery,
 				mIconRotation);

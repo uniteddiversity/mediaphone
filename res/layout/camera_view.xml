@@ -125,7 +125,7 @@
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@android:drawable/ic_menu_camera" />
+            android:drawableTop="@drawable/ic_action_camera" />
     </LinearLayout>
 
 </RelativeLayout>

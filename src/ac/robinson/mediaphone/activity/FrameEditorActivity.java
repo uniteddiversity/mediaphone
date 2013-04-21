@@ -48,6 +48,8 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.TypedValue;
@@ -69,6 +71,11 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	private boolean mDeleteFrameOnExit = false;
 
 	private LinkedHashMap<String, Integer> mFrameAudioItems = new LinkedHashMap<String, Integer>();
+
+	// the ids of inherited (spanned) media items from previous frames
+	private String mImageInherited;
+	private String[] mAudioInherited = new String[MAX_AUDIO_ITEMS];
+	private String mTextInherited;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -306,15 +313,24 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 			}
 		}
 
-		// reset interface
+		// reset interface and media inheritance
 		mReloadImagePath = null;
 		mFrameAudioItems.clear();
-		((CenteredImageTextButton) findViewById(R.id.button_take_picture_video))
-				.setCompoundDrawablesWithIntrinsicBounds(0, android.R.drawable.ic_menu_camera, 0, 0);
+		CenteredImageTextButton imageButton = (CenteredImageTextButton) findViewById(R.id.button_take_picture_video);
+		imageButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_image, 0, 0);
 		// (audio buttons are loaded/reset after audio files are loaded)
-		((CenteredImageTextButton) findViewById(R.id.button_add_text)).setText("");
+		CenteredImageTextButton textButton = (CenteredImageTextButton) findViewById(R.id.button_add_text);
+		textButton.setText("");
+		textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text, 0, 0);
 
-		// load existing content into buttons
+		mImageInherited = null;
+		for (int i = 0; i < MAX_AUDIO_ITEMS; i++) {
+			mAudioInherited[i] = null;
+		}
+		mTextInherited = null;
+
+		// load existing content into buttons (no need to do any of this on new frames)
+		// TODO: deal with inherited media on new frames...
 		if (!mAddNewFrame) {
 			ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(getContentResolver(),
 					mFrameInternalId);
@@ -327,10 +343,19 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 						&& (currentType == MediaPhoneProvider.TYPE_IMAGE_BACK
 								|| currentType == MediaPhoneProvider.TYPE_IMAGE_FRONT || currentType == MediaPhoneProvider.TYPE_VIDEO)) {
 					mReloadImagePath = currentItem.getFile().getAbsolutePath();
+					mImageInherited = (currentItem.getSpanFrames() && !currentItem.getParentId().equals(
+							mFrameInternalId)) ? currentItem.getInternalId() : null;
+					if (mImageInherited != null) {
+						// this was originally going to be done in onDraw of CenteredImageTextButton, but there's a
+						// bizarre bug that causes the canvas to be translated just over 8000 pixels to the left before
+						// it's given to our onDraw method - instead we now use a layer drawable when loading
+					}
 					imageLoaded = true;
 
 				} else if (!audioLoaded && currentType == MediaPhoneProvider.TYPE_AUDIO) {
 					mFrameAudioItems.put(currentItem.getInternalId(), currentItem.getDurationMilliseconds());
+					mAudioInherited[mFrameAudioItems.size() - 1] = (currentItem.getSpanFrames() && !currentItem
+							.getParentId().equals(mFrameInternalId)) ? currentItem.getInternalId() : null;
 					if (mFrameAudioItems.size() >= MAX_AUDIO_ITEMS) {
 						audioLoaded = true;
 					}
@@ -338,7 +363,12 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				} else if (!textLoaded && currentType == MediaPhoneProvider.TYPE_TEXT) {
 					String textSnippet = IOUtilities.getFileContentSnippet(currentItem.getFile().getAbsolutePath(),
 							getResources().getInteger(R.integer.text_snippet_length));
-					((CenteredImageTextButton) findViewById(R.id.button_add_text)).setText(textSnippet);
+					textButton.setText(textSnippet);
+					mTextInherited = (currentItem.getSpanFrames() && !currentItem.getParentId()
+							.equals(mFrameInternalId)) ? currentItem.getInternalId() : null;
+					if (mTextInherited != null) {
+						textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text_locked, 0, 0);
+					}
 					textLoaded = true;
 				}
 			}
@@ -438,10 +468,19 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				(CenteredImageTextButton) findViewById(R.id.button_record_audio_3) };
 		audioButtons[2].setText("");
 
+		// reset locked (inherited) media
+		for (CenteredImageTextButton button : audioButtons) {
+			button.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_audio, 0, 0);
+		}
+
 		// load the audio content
 		int audioIndex = 0;
 		for (Entry<String, Integer> audioMedia : mFrameAudioItems.entrySet()) {
 			audioButtons[audioIndex].setText(StringUtilities.millisecondsToTimeString(audioMedia.getValue(), false));
+			if (mAudioInherited[audioIndex] != null) {
+				audioButtons[audioIndex].setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_audio_locked,
+						0, 0);
+			}
 			audioIndex += 1;
 		}
 
@@ -470,7 +509,17 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				.getWidth() : cameraButton.getHeight()) * resourceValue.getFloat());
 		BitmapDrawable cachedIcon = new BitmapDrawable(resources, BitmapUtilities.loadAndCreateScaledBitmap(imagePath,
 				pictureSize, pictureSize, BitmapUtilities.ScalingLogic.CROP, true));
-		cameraButton.setCompoundDrawablesWithIntrinsicBounds(null, cachedIcon, null, null);
+		if (mImageInherited != null) {
+			Drawable[] layers = new Drawable[2];
+			layers[0] = cachedIcon;
+			layers[1] = resources.getDrawable(R.drawable.ic_frame_image_locked);
+			LayerDrawable layerDrawable = new LayerDrawable(layers);
+			layerDrawable.setLayerInset(1, pictureSize - layers[1].getIntrinsicHeight(),
+					pictureSize - layers[1].getIntrinsicWidth(), 0, 0);
+			cameraButton.setCompoundDrawablesWithIntrinsicBounds(null, layerDrawable, null, null);
+		} else {
+			cameraButton.setCompoundDrawablesWithIntrinsicBounds(null, cachedIcon, null, null);
+		}
 	}
 
 	private void changeFrames(String newFrameId) {
@@ -517,6 +566,34 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		return -1;
 	}
 
+	private void editImage() {
+		final Intent takePictureIntent = new Intent(FrameEditorActivity.this, CameraActivity.class);
+		takePictureIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
+		startActivityForResult(takePictureIntent, MediaPhone.R_id_intent_picture_editor);
+	}
+
+	private void editAudio(int selectedAudioIndex, boolean loadExisting) {
+		final Intent recordAudioIntent = new Intent(FrameEditorActivity.this, AudioActivity.class);
+		recordAudioIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
+		if (loadExisting) {
+			int currentIndex = 0;
+			for (String audioMediaId : mFrameAudioItems.keySet()) {
+				if (currentIndex == selectedAudioIndex) {
+					recordAudioIntent.putExtra(getString(R.string.extra_internal_id), audioMediaId);
+					break;
+				}
+				currentIndex += 1;
+			}
+		}
+		startActivityForResult(recordAudioIntent, MediaPhone.R_id_intent_audio_editor);
+	}
+
+	private void editText() {
+		final Intent addTextIntent = new Intent(FrameEditorActivity.this, TextActivity.class);
+		addTextIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
+		startActivityForResult(addTextIntent, MediaPhone.R_id_intent_text_editor);
+	}
+
 	public void handleButtonClicks(View currentButton) {
 		if (!verifyButtonClick(currentButton)) {
 			return;
@@ -529,32 +606,84 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				break;
 
 			case R.id.button_take_picture_video:
-				final Intent takePictureIntent = new Intent(FrameEditorActivity.this, CameraActivity.class);
-				takePictureIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
-				startActivityForResult(takePictureIntent, MediaPhone.R_id_intent_picture_editor);
+				if (mImageInherited != null) {
+					AlertDialog.Builder builder = new AlertDialog.Builder(FrameEditorActivity.this);
+					builder.setTitle(R.string.span_media_edit_image_title);
+					builder.setMessage(R.string.span_media_edit_image);
+					builder.setIcon(android.R.drawable.ic_dialog_info);
+					builder.setNegativeButton(R.string.span_media_edit_original, new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int which) {
+							editImage();
+						}
+					});
+					builder.setPositiveButton(R.string.span_media_add_new, new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int whichButton) {
+							endLinkedMediaItem(mImageInherited, mFrameInternalId); // remove the existing media link
+							editImage();
+						}
+					});
+					AlertDialog alert = builder.create();
+					alert.show();
+				} else {
+					editImage();
+				}
 				break;
 
 			case R.id.button_record_audio_1:
 			case R.id.button_record_audio_2:
 			case R.id.button_record_audio_3:
-				final Intent recordAudioIntent = new Intent(FrameEditorActivity.this, AudioActivity.class);
-				recordAudioIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
-				int selectedAudioIndex = getAudioIndex(buttonId);
-				int currentIndex = 0;
-				for (String audioMediaId : mFrameAudioItems.keySet()) {
-					if (currentIndex == selectedAudioIndex) {
-						recordAudioIntent.putExtra(getString(R.string.extra_internal_id), audioMediaId);
-						break;
-					}
-					currentIndex += 1;
+				final int selectedAudioIndex = getAudioIndex(buttonId);
+				if (mAudioInherited[selectedAudioIndex] != null) {
+					AlertDialog.Builder builder = new AlertDialog.Builder(FrameEditorActivity.this);
+					builder.setTitle(R.string.span_media_edit_audio_title);
+					builder.setMessage(R.string.span_media_edit_audio);
+					builder.setIcon(android.R.drawable.ic_dialog_info);
+					builder.setNegativeButton(R.string.span_media_edit_original, new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int which) {
+							editAudio(selectedAudioIndex, true);
+						}
+					});
+					builder.setPositiveButton(R.string.span_media_add_new, new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int whichButton) {
+							endLinkedMediaItem(mAudioInherited[selectedAudioIndex], mFrameInternalId); // remove link
+							editAudio(selectedAudioIndex, false);
+						}
+					});
+					AlertDialog alert = builder.create();
+					alert.show();
+				} else {
+					editAudio(selectedAudioIndex, true);
 				}
-				startActivityForResult(recordAudioIntent, MediaPhone.R_id_intent_audio_editor);
 				break;
 
 			case R.id.button_add_text:
-				final Intent addTextIntent = new Intent(FrameEditorActivity.this, TextActivity.class);
-				addTextIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
-				startActivityForResult(addTextIntent, MediaPhone.R_id_intent_text_editor);
+				if (mTextInherited != null) {
+					AlertDialog.Builder builder = new AlertDialog.Builder(FrameEditorActivity.this);
+					builder.setTitle(R.string.span_media_edit_text_title);
+					builder.setMessage(R.string.span_media_edit_text);
+					builder.setIcon(android.R.drawable.ic_dialog_info);
+					builder.setNegativeButton(R.string.span_media_edit_original, new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int which) {
+							editText();
+						}
+					});
+					builder.setPositiveButton(R.string.span_media_add_new, new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int whichButton) {
+							endLinkedMediaItem(mTextInherited, mFrameInternalId); // remove the existing media link
+							editText();
+						}
+					});
+					AlertDialog alert = builder.create();
+					alert.show();
+				} else {
+					editText();
+				}
 				break;
 
 			case R.id.button_delete_frame:

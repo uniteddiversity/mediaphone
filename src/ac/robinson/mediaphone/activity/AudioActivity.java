@@ -399,6 +399,8 @@ public class AudioActivity extends MediaPhoneActivity {
 		// load the existing audio
 		final MediaItem audioMediaItem = MediaManager.findMediaByInternalId(contentResolver, mMediaItemInternalId);
 		if (audioMediaItem != null) {
+			updateSpanFramesButtonIcon(R.id.button_toggle_mode_audio, audioMediaItem.getSpanFrames()); // span state
+
 			mRecordingIsAllowed = true;
 			final File currentFile = audioMediaItem.getFile();
 			if (currentFile.length() > 0) {
@@ -1165,6 +1167,19 @@ public class AudioActivity extends MediaPhoneActivity {
 						mMediaItemInternalId);
 				if (audioMediaItem != null) {
 					switchToRecording(audioMediaItem.getFile());
+				}
+				break;
+
+			case R.id.button_toggle_mode_audio:
+				final MediaItem spanningMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
+						mMediaItemInternalId);
+				if (spanningMediaItem != null && spanningMediaItem.getFile().length() > 0) {
+					boolean frameSpanning = toggleFrameSpanningMedia(mMediaItemInternalId);
+					updateSpanFramesButtonIcon(R.id.button_toggle_mode_audio, frameSpanning);
+					UIUtilities.showToast(AudioActivity.this, frameSpanning ? R.string.span_audio_multiple_frames
+							: R.string.span_audio_single_frame);
+				} else {
+					UIUtilities.showToast(AudioActivity.this, R.string.span_audio_add_content);
 				}
 				break;
 

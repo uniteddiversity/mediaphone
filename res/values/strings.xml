@@ -105,6 +105,9 @@
     <string name="delete_audio_succeeded">The sound has been deleted</string>
     <string name="split_audio_add_content">Please record audio before creating a new frame</string>
     <string name="retake_audio_forbidden">Sorry, this audio is in a format that cannot be edited. To replace it, please delete the current recording first</string>
+    <string name="span_audio_add_content">Please record audio before spanning to other frames</string>
+    <string name="span_audio_multiple_frames">This audio will now play over all frames after this one, up to the next frame with audio</string>
+    <string name="span_audio_single_frame">This audio will now play on this frame only</string>
 
     <!-- frame editor -->
     <string name="error_loading_frame_editor">Error loading frame editor – please try again</string>
@@ -119,6 +122,14 @@
     <string name="delete_narrative_confirmation">Delete narrative?</string>
     <string name="delete_narrative_hint">The narrative this frame belongs to will be permanently deleted</string>
     <string name="delete_narrative_second_confirmation">Please confirm</string>
+    <string name="span_media_edit_image_title">Edit image</string>
+    <string name="span_media_edit_image">This image is from another frame – would you like to add a new image here, or edit the original?</string>
+    <string name="span_media_edit_audio_title">Edit audio</string>
+    <string name="span_media_edit_audio">This audio is from another frame – would you like to add new audio here, or edit the original?</string>
+    <string name="span_media_edit_text_title">Edit text</string>
+    <string name="span_media_edit_text">This text is from another frame – would you like to add new text here, or edit the original?</string>
+    <string name="span_media_edit_original">Edit original</string>
+    <string name="span_media_add_new">Add new</string>
 
     <plurals name="delete_narrative_second_hint">
         <item quantity="one">The entire narrative (one frame) will be permanently deleted</item>
