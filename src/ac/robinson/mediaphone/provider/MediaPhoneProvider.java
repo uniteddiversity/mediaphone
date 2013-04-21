@@ -320,28 +320,39 @@ public class MediaPhoneProvider extends ContentProvider {
 
 		// in a separate function as it's used in both upgrade and creation
 		private void createMediaLinksTable(SQLiteDatabase db) {
-			db.execSQL("CREATE TABLE " + MEDIA_LINKS_LOCATION + " (" //
+			db.execSQL("CREATE TABLE IF NOT EXISTS " + MEDIA_LINKS_LOCATION + " (" //
 					+ MediaItem._ID + " INTEGER PRIMARY KEY, " // required for Android Adapters
 					+ MediaItem.INTERNAL_ID + " TEXT, " // the GUID of the linked media item
 					+ MediaItem.PARENT_ID + " TEXT, " // the GUID of the parent this media item is linked to
 					+ MediaItem.DELETED + " INTEGER);"); // whether this link has been deleted
-			db.execSQL("CREATE INDEX " + MEDIA_LINKS_LOCATION + "Index" + MediaItem.INTERNAL_ID + " ON "
+			db.execSQL("CREATE INDEX IF NOT EXISTS " + MEDIA_LINKS_LOCATION + "Index" + MediaItem.INTERNAL_ID + " ON "
 					+ MEDIA_LINKS_LOCATION + "(" + MediaItem.INTERNAL_ID + ");");
-			db.execSQL("CREATE INDEX " + MEDIA_LINKS_LOCATION + "Index" + MediaItem.PARENT_ID + " ON "
+			db.execSQL("CREATE INDEX IF NOT EXISTS " + MEDIA_LINKS_LOCATION + "Index" + MediaItem.PARENT_ID + " ON "
 					+ MEDIA_LINKS_LOCATION + "(" + MediaItem.PARENT_ID + ");");
 		}
 
 		@Override
 		public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-			if (MediaPhone.DEBUG) {
-				Log.d(DebugUtilities.getLogTag(this), "Database upgrade requested from version " + oldVersion + " to "
-						+ newVersion);
-			}
+			Log.i(DebugUtilities.getLogTag(this), "Database upgrade requested from version " + oldVersion + " to "
+					+ newVersion);
 
 			// TODO: backup database if necessary (also: check for read only database?)
+
+			// must always check whether the items we're upgrading already exist, just in case a downgrade has occurred
 			switch (newVersion) {
 				case 2:
-					db.execSQL("ALTER TABLE " + MEDIA_LOCATION + " ADD COLUMN " + MediaItem.SPAN_FRAMES + " INTEGER;");
+					Cursor c = null;
+					try {
+						c = db.rawQuery("SELECT * FROM " + MEDIA_LOCATION + " LIMIT 0,1", null);
+						if (c.getColumnIndex(MediaItem.SPAN_FRAMES) < 0) {
+							db.execSQL("ALTER TABLE " + MEDIA_LOCATION + " ADD COLUMN " + MediaItem.SPAN_FRAMES
+									+ " INTEGER;");
+						}
+					} finally {
+						if (c != null) {
+							c.close();
+						}
+					}
 					createMediaLinksTable(db);
 					break;
 			}
@@ -349,10 +360,8 @@ public class MediaPhoneProvider extends ContentProvider {
 
 		@Override
 		public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-			if (MediaPhone.DEBUG) {
-				Log.d(DebugUtilities.getLogTag(this), "Database downgrade requested from version " + oldVersion
-						+ " to " + newVersion + " - ignoring.");
-			}
+			Log.i(DebugUtilities.getLogTag(this), "Database downgrade requested from version " + oldVersion + " to "
+					+ newVersion + " - ignoring.");
 		}
 	}
 }
