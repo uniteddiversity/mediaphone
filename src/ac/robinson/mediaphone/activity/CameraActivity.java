@@ -377,6 +377,8 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 		// load the existing image
 		final MediaItem imageMediaItem = MediaManager.findMediaByInternalId(contentResolver, mMediaItemInternalId);
 		if (imageMediaItem != null) {
+			updateSpanFramesButtonIcon(R.id.button_toggle_mode_picture, imageMediaItem.getSpanFrames()); // span state
+
 			if (mSwitchToLandscape < 0 && imageMediaItem.getFile().length() > 0) {
 				if (imageMediaItem.getType() == MediaPhoneProvider.TYPE_IMAGE_FRONT) {
 					mCameraConfiguration.usingFrontCamera = true;
@@ -917,7 +919,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 		switch (taskId) {
 			case R.id.split_frame_task_complete:
 				((ImageView) findViewById(R.id.camera_result)).setImageBitmap(null); // otherwise we copy to new frame
-				mHasEditedMedia = false;
+				mHasEditedMedia = true; // because now the original media item has a new id, so must reload in editor
 				setBackButtonIcons(CameraActivity.this, R.id.button_finished_picture, 0, false);
 				if (mDisplayMode != DisplayMode.TAKE_PICTURE) {
 					switchToCamera(mCameraConfiguration.usingFrontCamera, false);
@@ -1049,6 +1051,19 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 				} // fine to follow through if we're not in picture mode
 			case R.id.camera_result:
 				retakePicture();
+				break;
+
+			case R.id.button_toggle_mode_picture:
+				final MediaItem imageMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
+						mMediaItemInternalId);
+				if (imageMediaItem != null && imageMediaItem.getFile().length() > 0) {
+					boolean frameSpanning = toggleFrameSpanningMedia(mMediaItemInternalId);
+					updateSpanFramesButtonIcon(R.id.button_toggle_mode_picture, frameSpanning);
+					UIUtilities.showToast(CameraActivity.this, frameSpanning ? R.string.span_image_multiple_frames
+							: R.string.span_image_single_frame);
+				} else {
+					UIUtilities.showToast(CameraActivity.this, R.string.span_image_add_content);
+				}
 				break;
 
 			case R.id.button_delete_picture:

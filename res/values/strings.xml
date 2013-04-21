@@ -67,9 +67,9 @@
     <string name="delete_text_hint">All the text on this frame will be permanently deleted</string>
     <string name="delete_text_succeeded">The text has been deleted</string>
     <string name="split_text_add_content">Please add text before creating a new frame</string>
-    <string name="span_text_add_content">Please add text before making it show on other frames</string>
-    <string name="span_text_multiple_frames">This text will now show on following frames</string>
-    <string name="span_text_single_frame">This text will now only show on this frame</string>
+    <string name="span_text_add_content">Please add text before spanning to other frames</string>
+    <string name="span_text_multiple_frames">This text will now show on all frames after this one, up to the next frame with text</string>
+    <string name="span_text_single_frame">This text will now show on this frame only</string>
 
     <!-- image editor -->
     <string name="error_loading_image_editor">Error loading image editor – please try again</string>
@@ -86,6 +86,9 @@
     <string name="delete_image_hint">The image will be permanently deleted</string>
     <string name="delete_image_succeeded">The image has been deleted</string>
     <string name="split_image_add_content">Please add an image before creating a new frame</string>
+    <string name="span_image_add_content">Please add an image before spanning to other frames</string>
+    <string name="span_image_multiple_frames">This image will now show on all frames after this one, up to the next frame with an image</string>
+    <string name="span_image_single_frame">This image will now show on this frame only</string>
 
     <!-- audio editor -->
     <string name="error_loading_audio_editor">Error loading sound editor – please try again</string>

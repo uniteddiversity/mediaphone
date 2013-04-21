@@ -2053,7 +2053,6 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				// update the icon
 				ContentResolver contentResolver = getContentResolver();
 				FrameItem thisFrame = FramesManager.findFrameByInternalId(contentResolver, frameInternalId);
-				Log.d("blah", "updating frame icon " + thisFrame.getInternalId());
 				if (thisFrame != null) { // if run from switchFrames then the existing frame could have been deleted
 					FramesManager.reloadFrameIcon(getResources(), contentResolver, thisFrame, true);
 				}
