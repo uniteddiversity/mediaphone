@@ -1148,6 +1148,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		// the current media item is a special case - we do it separately because we don't want to accidentally delete
 		// the frame if its only current content is the inherited item; there's also no need to update the icon because
 		// if they do edit we'll update automatically; if they don't then we'll have to undo all these changes...
+		// TODO: concurrent updates - we're editing a different item to the background task; is this ok in practice?
 		MediaManager.deleteMediaLink(getContentResolver(), startFrameId, mediaId);
 	}
 
@@ -1228,7 +1229,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					case 0:
 						return; // nothing to do - no frames found, so we won't be able to update the icon
 					case 1:
-						return; // nothing do do - we only have the previous frame, so can't propagate or update
+						getFrameIconUpdaterRunnable(startFrameId).run();
+						return; // nothing do do - we only have the previous frame, and have already propagated/deleted
 				}
 
 				// check media in the previous frame to expand if necessary - because of links need only check one frame
@@ -1444,6 +1446,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		});
 
 		// finally, toggle the spanning state of the media item and return the new state
+		// TODO: this could be why toggling sometimes fails - concurrent database access - check
 		mediaItem.setSpanFrames(!isFrameSpanning);
 		MediaManager.updateMedia(getContentResolver(), mediaItem);
 		return !isFrameSpanning;
