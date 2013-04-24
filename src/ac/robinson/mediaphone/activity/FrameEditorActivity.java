@@ -395,16 +395,12 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		final String insertAfterId = intent.getStringExtra(getString(R.string.extra_insert_after_id));
 
 		// don't load the frame's icon yet - it will be loaded (or deleted) when we return
-		Resources res = getResources();
 		ContentResolver contentResolver = getContentResolver();
 		FrameItem newFrame = new FrameItem(narrativeId, -1);
-		FramesManager.addFrame(res, contentResolver, newFrame, false);
+		FramesManager.addFrame(getResources(), contentResolver, newFrame, false);
 		mFrameInternalId = newFrame.getInternalId();
 
-		// note: not a background task any more, because it causes concurrency problems with deleting after back press
-		int narrativeSequenceIdIncrement = res.getInteger(R.integer.frame_narrative_sequence_increment);
 		int narrativeSequenceId = 0;
-
 		if (insertNewNarrative) {
 			// new narrative required
 			NarrativeItem newNarrative = new NarrativeItem(narrativeId,
@@ -412,54 +408,11 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 			NarrativesManager.addNarrative(contentResolver, newNarrative);
 
 		} else {
-			// default to inserting at the end if no before/after id is given
-			if (insertBeforeId == null && insertAfterId == null) {
-				narrativeSequenceId = FramesManager.findLastFrameNarrativeSequenceId(contentResolver, narrativeId)
-						+ narrativeSequenceIdIncrement;
-
-			} else {
-				// insert new frame - increment necessary frames after the new frame's position
-				boolean insertAtStart = FrameItem.KEY_FRAME_ID_START.equals(insertBeforeId);
-				ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, narrativeId);
-				narrativeFrames.remove(0); // don't edit the newly inserted frame yet
-
-				int previousNarrativeSequenceId = -1;
-				boolean frameFound = false;
-				for (FrameItem frame : narrativeFrames) {
-					if (!frameFound && (insertAtStart || frame.getInternalId().equals(insertBeforeId))) {
-						frameFound = true;
-						narrativeSequenceId = frame.getNarrativeSequenceId();
-					}
-					if (frameFound) {
-						int currentNarrativeSequenceId = frame.getNarrativeSequenceId();
-						if (currentNarrativeSequenceId <= narrativeSequenceId
-								|| currentNarrativeSequenceId <= previousNarrativeSequenceId) {
-
-							frame.setNarrativeSequenceId(currentNarrativeSequenceId
-									+ Math.max(narrativeSequenceId - currentNarrativeSequenceId,
-											previousNarrativeSequenceId - currentNarrativeSequenceId) + 1);
-							if (insertAtStart) {
-								FramesManager.updateFrame(res, contentResolver, frame, true);
-								insertAtStart = false;
-							} else {
-								FramesManager.updateFrame(contentResolver, frame);
-							}
-							previousNarrativeSequenceId = frame.getNarrativeSequenceId();
-						} else {
-							break;
-						}
-					}
-					if (!frameFound && frame.getInternalId().equals(insertAfterId)) {
-						frameFound = true;
-						narrativeSequenceId = frame.getNarrativeSequenceId() + narrativeSequenceIdIncrement;
-					}
-				}
-			}
+			narrativeSequenceId = adjustNarrativeSequenceIds(narrativeId, insertBeforeId, insertAfterId);
 		}
 
-		FrameItem thisFrame = FramesManager.findFrameByInternalId(contentResolver, mFrameInternalId);
-		thisFrame.setNarrativeSequenceId(narrativeSequenceId);
-		FramesManager.updateFrame(contentResolver, thisFrame);
+		newFrame.setNarrativeSequenceId(narrativeSequenceId);
+		FramesManager.updateFrame(contentResolver, newFrame);
 	}
 
 	private void reloadAudioButtons() {

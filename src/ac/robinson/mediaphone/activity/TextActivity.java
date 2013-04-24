@@ -126,7 +126,7 @@ public class TextActivity extends MediaPhoneActivity {
 		@Override
 		public void onTextChanged(CharSequence s, int start, int before, int count) {
 			if (!mHasEditedMedia) {
-				mHasEditedMedia = true; // so the action bar refreshes to the correct icon
+				mHasEditedMedia = true; // so we keep the same icon on rotation
 				setBackButtonIcons(TextActivity.this, R.id.button_finished_text, 0, true);
 			}
 			mHasEditedMedia = true;
@@ -151,7 +151,36 @@ public class TextActivity extends MediaPhoneActivity {
 
 		final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(), mMediaItemInternalId);
 		if (textMediaItem != null) {
-			saveCurrentText(textMediaItem, true);
+			// check whether we need to save the text or delete the media item (if empty)
+			final Editable mediaText = mEditText.getText();
+			if (!TextUtils.isEmpty(mediaText)) {
+				if (mHasEditedMedia) {
+					Runnable textUpdateRunnable = new Runnable() {
+						@Override
+						public void run() {
+							// save the current text
+							FileOutputStream fileOutputStream = null;
+							try {
+								fileOutputStream = new FileOutputStream(textMediaItem.getFile());
+								fileOutputStream.write(mediaText.toString().getBytes());
+								fileOutputStream.flush(); // does nothing in FileOutputStream
+							} catch (Throwable t) {
+								// no need to update the icon - nothing has changed
+							} finally {
+								IOUtilities.closeStream(fileOutputStream);
+							}
+						}
+					};
+
+					// update this frame's icon with the new text; propagate to following frames if applicable
+					updateMediaFrameIcons(textMediaItem, textUpdateRunnable);
+				}
+			} else {
+				// we've been deleted - propagate changes to our parent frame and any following frames
+				expandLinkedMediaAndDeleteItem(textMediaItem.getParentId(), textMediaItem);
+			}
+
+			// save the id of the frame we're part of so that the frame editor gets notified
 			saveLastEditedFrame(textMediaItem.getParentId());
 		}
 
@@ -195,8 +224,13 @@ public class TextActivity extends MediaPhoneActivity {
 			case R.id.menu_add_frame:
 				final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
-				if (textMediaItem != null && saveCurrentText(textMediaItem, false)) {
-					runQueuedBackgroundTask(getFrameSplitterRunnable(mMediaItemInternalId));
+				if (textMediaItem != null && !TextUtils.isEmpty(mEditText.getText())) {
+					final String newFrameId = insertFrameAfterMedia(textMediaItem);
+					final Intent addTextIntent = new Intent(TextActivity.this, TextActivity.class);
+					addTextIntent.putExtra(getString(R.string.extra_parent_id), newFrameId);
+					startActivity(addTextIntent);
+
+					onBackPressed();
 				} else {
 					UIUtilities.showToast(TextActivity.this, R.string.split_text_add_content);
 				}
@@ -265,13 +299,14 @@ public class TextActivity extends MediaPhoneActivity {
 		// load any existing text
 		final MediaItem textMediaItem = MediaManager.findMediaByInternalId(contentResolver, mMediaItemInternalId);
 		if (textMediaItem != null) {
-			updateSpanFramesButtonIcon(R.id.button_toggle_mode_text, textMediaItem.getSpanFrames()); // show span state
+			updateSpanFramesButtonIcon(R.id.button_toggle_mode_text, textMediaItem.getSpanFrames(), false);
 
-			if (TextUtils.isEmpty(mEditText.getText().toString())) { // don't delete existing (i.e. changed) content
+			if (TextUtils.isEmpty(mEditText.getText())) { // don't delete existing (i.e. changed) content
 				mEditText.setText(IOUtilities.getFileContents(textMediaItem.getFile().getAbsolutePath()).toString());
 			}
 			// show the keyboard as a further hint (below Honeycomb it is automatic)
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) { // TODO: improve these keyboard manipulations
+			// TODO: improve/remove these keyboard manipulations
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
 				try {
 					InputMethodManager manager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
 					manager.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
@@ -284,55 +319,6 @@ public class TextActivity extends MediaPhoneActivity {
 			UIUtilities.showToast(TextActivity.this, R.string.error_loading_text_editor);
 			onBackPressed();
 			return;
-		}
-	}
-
-	private boolean saveCurrentText(MediaItem textMediaItem, boolean updateIcon) {
-		String mediaText = mEditText.getText().toString();
-		if (!TextUtils.isEmpty(mediaText)) {
-			if (mHasEditedMedia) {
-				FileOutputStream fileOutputStream = null;
-				try {
-					fileOutputStream = new FileOutputStream(textMediaItem.getFile());
-					fileOutputStream.write(mediaText.getBytes());
-					fileOutputStream.flush(); // does nothing in FileOutputStream
-				} catch (Throwable t) {
-					return false; // no need to update the icon - nothing has changed
-				} finally {
-					IOUtilities.closeStream(fileOutputStream);
-				}
-
-				// update the icon (no need if not mHasEditedMedia)
-				if (updateIcon) {
-					runQueuedBackgroundTask(getFrameIconUpdaterRunnable(textMediaItem.getParentId()));
-					if (textMediaItem.getSpanFrames()) {
-						updateSpanningMediaFrameIcons(textMediaItem);
-					}
-				}
-			}
-			return true;
-		} else {
-			// so we don't leave an empty stub
-			textMediaItem.setDeleted(true);
-			MediaManager.updateMedia(getContentResolver(), textMediaItem);
-
-			// update the icon to remove the text
-			if (updateIcon) {
-				runQueuedBackgroundTask(getFrameIconUpdaterRunnable(textMediaItem.getParentId()));
-				if (textMediaItem.getSpanFrames()) {
-					updateSpanningMediaFrameIcons(textMediaItem);
-				}
-			}
-			return false;
-		}
-	}
-
-	@Override
-	protected void onBackgroundTaskCompleted(int taskId) {
-		if (taskId == R.id.split_frame_task_complete) {
-			mEditText.setText(""); // otherwise we copy to the new frame
-			mHasEditedMedia = true; // because now the original media item has a new id, so must reload in editor
-			setBackButtonIcons(TextActivity.this, R.id.button_finished_text, 0, false);
 		}
 	}
 
@@ -374,9 +360,11 @@ public class TextActivity extends MediaPhoneActivity {
 				// text after toggling frame spanning, but this may be overkill for a situation that rarely happens?
 				final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
-				if (textMediaItem != null && saveCurrentText(textMediaItem, false)) {
-					boolean frameSpanning = toggleFrameSpanningMedia(mMediaItemInternalId);
-					updateSpanFramesButtonIcon(R.id.button_toggle_mode_text, frameSpanning);
+				if (textMediaItem != null && !TextUtils.isEmpty(mEditText.getText())) {
+					mHasEditedMedia = true; // so we keep the same icon on rotation
+					setBackButtonIcons(TextActivity.this, R.id.button_finished_text, 0, true);
+					boolean frameSpanning = toggleFrameSpanningMedia(textMediaItem);
+					updateSpanFramesButtonIcon(R.id.button_toggle_mode_text, frameSpanning, true);
 					UIUtilities.showToast(TextActivity.this, frameSpanning ? R.string.span_text_multiple_frames
 							: R.string.span_text_single_frame);
 				} else {

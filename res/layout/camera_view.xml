@@ -55,21 +55,21 @@
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@android:drawable/ic_menu_revert" />
+            android:drawableTop="@drawable/ic_menu_back" />
 
         <ac.robinson.view.CenteredImageTextButton
             android:id="@+id/button_toggle_mode_picture"
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@drawable/ic_action_span_frame_off" />
+            android:drawableTop="@drawable/ic_menu_span_frames_off" />
 
         <ac.robinson.view.CenteredImageTextButton
             android:id="@+id/button_delete_picture"
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@android:drawable/ic_menu_delete"
+            android:drawableTop="@drawable/ic_menu_delete"
             util:filterColorDefault="@color/button_red_default"
             util:filterColorTouched="@color/button_red_touched" />
     </LinearLayout>
@@ -111,21 +111,21 @@
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@android:drawable/ic_menu_revert" />
+            android:drawableTop="@drawable/ic_menu_back" />
 
         <ac.robinson.view.CenteredImageTextButton
             android:id="@+id/button_import_image"
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@android:drawable/ic_menu_gallery" />
+            android:drawableTop="@drawable/ic_menu_import_picture" />
 
         <ac.robinson.view.CenteredImageTextButton
             android:id="@+id/button_take_picture"
             style="@style/default_coloured_button"
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:drawableTop="@drawable/ic_action_camera" />
+            android:drawableTop="@drawable/ic_menu_take_picture" />
     </LinearLayout>
 
 </RelativeLayout>

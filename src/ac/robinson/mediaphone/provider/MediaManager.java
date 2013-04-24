@@ -101,16 +101,16 @@ public class MediaManager {
 	 * 
 	 * @param contentResolver
 	 * @param mediaId
-	 * @return
+	 * @return The number of links deleted
 	 */
-	public static boolean deleteMediaLinks(ContentResolver contentResolver, String mediaId) {
+	public static int deleteMediaLinks(ContentResolver contentResolver, String mediaId) {
 		final String[] arguments1 = mArguments1;
 		arguments1[0] = mediaId;
 		final ContentValues contentValues = new ContentValues();
 		contentValues.put(MediaItem.DELETED, 1);
 		int count = contentResolver.update(MediaItem.CONTENT_URI_LINK, contentValues, mMediaInternalIdSelection,
 				arguments1);
-		return count > 0;
+		return count;
 	}
 
 	/**
@@ -199,6 +199,38 @@ public class MediaManager {
 	}
 
 	/**
+	 * Get all media items that are linked to a specific frame. Note: *only* includes links; not normal items
+	 * 
+	 * @param contentResolver
+	 * @param parentId
+	 * @return
+	 */
+	public static ArrayList<String> findLinkedMediaIdsByParentId(ContentResolver contentResolver, String parentId) {
+		final ArrayList<String> subIds = new ArrayList<String>();
+
+		final String[] arguments1 = mArguments1;
+		arguments1[0] = parentId;
+		Cursor c = null;
+		try {
+			c = contentResolver.query(MediaItem.CONTENT_URI_LINK, MediaItem.PROJECTION_INTERNAL_ID,
+					mMediaParentIdSelection, arguments1, null);
+
+			if (c.getCount() > 0) {
+				final int columnIndex = c.getColumnIndexOrThrow(MediaItem.INTERNAL_ID);
+				while (c.moveToNext()) {
+					final String linkId = c.getString(columnIndex);
+					subIds.add(linkId);
+				}
+			}
+		} finally {
+			if (c != null) {
+				c.close();
+			}
+		}
+		return subIds;
+	}
+
+	/**
 	 * Gets a cursor that includes any media linked to this frame id, following the same pattern as
 	 * ContentResolver.query(). Media that isn't actually owned by this frame but is included in the query will have a
 	 * different parentId
@@ -212,35 +244,22 @@ public class MediaManager {
 
 		final String[] arguments1 = mArguments1;
 		arguments1[0] = parentId;
-		Cursor subC = null;
-		try {
-			// first resolve links to other media items from the MediaLinks table
-			subC = contentResolver.query(MediaItem.CONTENT_URI_LINK, MediaItem.PROJECTION_INTERNAL_ID,
-					mMediaParentIdSelection, arguments1, null);
-			ArrayList<String> subIds = new ArrayList<String>();
 
-			// if there are links then we need to add the other media ids to the current query
-			if (subC.getCount() > 0) {
-				subIds.add(parentId); // make sure we include the requested parent at the start of the WHERE clause
-				final int columnIndex = subC.getColumnIndexOrThrow(MediaItem.INTERNAL_ID);
-				while (subC.moveToNext()) {
-					subIds.add(subC.getString(columnIndex));
-				}
+		// first resolve links to other media items from the MediaLinks table
+		ArrayList<String> subIds = findLinkedMediaIdsByParentId(contentResolver, parentId);
 
-				// note: more than 999 placeholders is not supported in SQLite, but we shouldn't have more than 1 photo,
-				// 3 audio and 1 text items linked at most
-				return contentResolver.query(MediaItem.CONTENT_URI, projection, addPlaceholders(subIds.size() - 1),
-						subIds.toArray(new String[subIds.size()]), sortOrder);
-			} else {
-				// otherwise we just perform the normal query
-				return contentResolver.query(MediaItem.CONTENT_URI, projection, mMediaParentIdSelection, arguments1,
-						sortOrder);
-			}
+		// if there are links then we need to add the other media ids to the current query
+		if (subIds.size() > 0) {
+			subIds.add(0, parentId); // make sure we include the requested parent at the start of the WHERE clause
 
-		} finally {
-			if (subC != null) {
-				subC.close();
-			}
+			// note: more than 999 placeholders is not supported in SQLite, but we shouldn't have more than 1 photo,
+			// 3 audio and 1 text items linked at most
+			return contentResolver.query(MediaItem.CONTENT_URI, projection, addPlaceholders(subIds.size() - 1),
+					subIds.toArray(new String[subIds.size()]), sortOrder);
+		} else {
+			// otherwise we just perform the normal query
+			return contentResolver.query(MediaItem.CONTENT_URI, projection, mMediaParentIdSelection, arguments1,
+					sortOrder);
 		}
 	}
 

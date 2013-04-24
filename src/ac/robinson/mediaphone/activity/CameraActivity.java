@@ -377,7 +377,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 		// load the existing image
 		final MediaItem imageMediaItem = MediaManager.findMediaByInternalId(contentResolver, mMediaItemInternalId);
 		if (imageMediaItem != null) {
-			updateSpanFramesButtonIcon(R.id.button_toggle_mode_picture, imageMediaItem.getSpanFrames()); // span state
+			updateSpanFramesButtonIcon(R.id.button_toggle_mode_picture, imageMediaItem.getSpanFrames(), false);
 
 			if (mSwitchToLandscape < 0 && imageMediaItem.getFile().length() > 0) {
 				if (imageMediaItem.getType() == MediaPhoneProvider.TYPE_IMAGE_FRONT) {
@@ -1057,8 +1057,8 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 				final MediaItem imageMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
 				if (imageMediaItem != null && imageMediaItem.getFile().length() > 0) {
-					boolean frameSpanning = toggleFrameSpanningMedia(mMediaItemInternalId);
-					updateSpanFramesButtonIcon(R.id.button_toggle_mode_picture, frameSpanning);
+					boolean frameSpanning = toggleFrameSpanningMedia(imageMediaItem);
+					updateSpanFramesButtonIcon(R.id.button_toggle_mode_picture, frameSpanning, true);
 					UIUtilities.showToast(CameraActivity.this, frameSpanning ? R.string.span_image_multiple_frames
 							: R.string.span_image_single_frame);
 				} else {
@@ -1216,14 +1216,12 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 
 		// animate rotating the button icons
 		Resources res = getResources();
-		animateButtonRotation(res, animation, R.id.button_take_picture, R.drawable.ic_action_camera,
-				mIconRotation);
-		animateButtonRotation(res, animation, R.id.button_import_image, android.R.drawable.ic_menu_gallery,
+		animateButtonRotation(res, animation, R.id.button_take_picture, R.drawable.ic_menu_take_picture, mIconRotation);
+		animateButtonRotation(res, animation, R.id.button_import_image, R.drawable.ic_menu_import_picture,
 				mIconRotation);
 
 		if (findViewById(R.id.button_cancel_camera).getVisibility() == View.VISIBLE) {
-			animateButtonRotation(res, animation, R.id.button_cancel_camera, android.R.drawable.ic_menu_revert,
-					mIconRotation);
+			animateButtonRotation(res, animation, R.id.button_cancel_camera, R.drawable.ic_menu_back, mIconRotation);
 		}
 
 		if (findViewById(R.id.button_switch_camera).getVisibility() == View.VISIBLE) {
