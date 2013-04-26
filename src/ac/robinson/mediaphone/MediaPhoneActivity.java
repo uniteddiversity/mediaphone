@@ -26,7 +26,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Hashtable;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -963,22 +962,23 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		final String parentFrameId = parentFrame.getInternalId();
 		ArrayList<String> narrativeFrameIds = FramesManager.findFrameIdsByParentId(getContentResolver(),
 				parentFrame.getParentId());
+		ArrayList<String> idsToRemove = new ArrayList<String>();
 
-		Iterator<String> iterator = narrativeFrameIds.iterator(); // use an iterator so we can remove in situ
+		// used to use an iterator here, but it turns out that remove() can fail silently (!)
 		String previousFrameId = null;
-		while (iterator.hasNext()) {
-			String nextId = iterator.next();
-			iterator.remove();
-			if (parentFrameId.equals(nextId)) {
+		for (final String frameId : narrativeFrameIds) {
+			idsToRemove.add(frameId);
+			if (parentFrameId.equals(frameId)) {
 				break;
 			}
-			previousFrameId = nextId;
+			previousFrameId = frameId;
 		}
 
 		if (includePrevious) {
-			narrativeFrameIds.add(0, previousFrameId);
+			idsToRemove.remove(previousFrameId);
 		}
 
+		narrativeFrameIds.removeAll(idsToRemove);
 		return narrativeFrameIds;
 	}
 
@@ -1152,12 +1152,17 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			return; // no frames found - error; won't be able to update anything
 		}
 
-		final ArrayList<MediaItem> previousMedia; // save loading twice if we can
+		// save loading things twice if we can
+		final ArrayList<MediaItem> previousMedia;
+		final ArrayList<String> linkedFrames;
 
 		// because we delete and propagate all icons at once, the current frame's propagated media may not have been
 		// updated by the time we return, and may not show in the frame editor - to deal with this we propagate the
 		// current frame's media first, on the UI thread, but only for the type of deletedMediaItem (no others apply)
 		if (deletedMediaItem != null && narrativeFrameIds.size() >= 1) { // >= 1 so we have at least the previous
+
+			// get a list of linked items in this thread as conflicts were occurring (random quits) in the task thread
+			linkedFrames = MediaManager.findLinkedParentIdsByMediaId(contentResolver, deletedMediaItem.getInternalId());
 
 			// we end up deleting this twice; fine because we're only setting deleted (rather than actually removing)
 			deletedMediaItem.setDeleted(true);
@@ -1181,6 +1186,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			}
 		} else {
 			previousMedia = null;
+			linkedFrames = null;
 		}
 
 		// because database access can take time, we need to do db and icon updates in the same thread
@@ -1228,9 +1234,11 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					} else {
 						tempMedia = MediaManager.findMediaByParentId(contentResolver, previousFrameId);
 					}
-					for (MediaItem media : tempMedia) {
+
+					// filter - we only need items that span frames
+					for (final MediaItem media : tempMedia) {
 						if (media.getSpanFrames()) {
-							prevMedia.add(media); // we only need items that span frames
+							prevMedia.add(media);
 						}
 					}
 				}
@@ -1238,7 +1246,6 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				// we only need to remove the deleted media from other frames if it was a frame-spanning item
 				final String deletedMediaId = (deletedMediaItem != null && deletedMediaItem.getSpanFrames()) ? deletedMediaItem
 						.getInternalId() : null;
-
 				if (prevMedia.size() == 0 && deletedMediaId == null) {
 					// no spanning items or media to delete; nothing to do except update the current frame's icon
 					getFrameIconUpdaterRunnable(startFrameId).run();
@@ -1246,8 +1253,12 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// hold a list of icons to update, so we only update each icon once at most; start with known links
-				ArrayList<String> iconsToUpdate = MediaManager.findLinkedParentIdsByMediaId(contentResolver,
-						deletedMediaId);
+				ArrayList<String> iconsToUpdate;
+				if (linkedFrames != null) {
+					iconsToUpdate = linkedFrames;
+				} else {
+					iconsToUpdate = MediaManager.findLinkedParentIdsByMediaId(contentResolver, deletedMediaId);
+				}
 				iconsToUpdate.add(0, startFrameId); // must always update the current icon (first for better appearance)
 
 				// now remove previously propagated media and propagate media from earlier frames
@@ -1274,20 +1285,20 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 
 					// need to check all following frames until we find those with media of this type
 					if (prevMedia.size() > 0) {
-
 						// check this frame's media for collisions with spanning items
-						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId);
-						Iterator<MediaItem> iterator = prevMedia.iterator(); // for removal in situ
-						while (iterator.hasNext()) {
-							MediaItem nextItem = iterator.next();
-							int currentType = nextItem.getType();
+						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId,
+								false);
+						ArrayList<MediaItem> mediaToRemove = new ArrayList<MediaItem>();
+						for (final MediaItem inheritedMedia : prevMedia) {
+							int currentType = inheritedMedia.getType();
 							for (MediaItem existingMedia : frameMedia) {
 								if (existingMedia.getType() == currentType) {
-									iterator.remove(); // current item overrides the spanning - finished item
+									mediaToRemove.add(inheritedMedia); // this media overrides spanning - finished item
 									// break; //TODO: should we do audio differently? currently one overrides all
 								}
 							}
 						}
+						frameMedia.removeAll(mediaToRemove);
 
 						// any media still in the propagated list should be added to this frame
 						if (prevMedia.size() > 0) {
@@ -1377,7 +1388,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					// turn this item into a frame-spanning media item by extending it to other frames
 					for (String frameId : narrativeFrameIds) {
 						// need to add this media to all following frames until one that already has media of this type
-						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId);
+						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId,
+								false); // (no linked media needed)
 						boolean mediaFound = false;
 						for (MediaItem media : frameMedia) {
 							if (media.getType() == mediaType) {

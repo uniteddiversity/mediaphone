@@ -294,11 +294,23 @@ public class MediaManager {
 	}
 
 	public static ArrayList<MediaItem> findMediaByParentId(ContentResolver contentResolver, String parentId) {
+		return findMediaByParentId(contentResolver, parentId, true);
+	}
+
+	public static ArrayList<MediaItem> findMediaByParentId(ContentResolver contentResolver, String parentId,
+			boolean includeLinks) {
 		final ArrayList<MediaItem> medias = new ArrayList<MediaItem>();
 		Cursor c = null;
 		try {
-			c = getLinkedParentIdMediaCursor(contentResolver, MediaItem.PROJECTION_ALL, parentId,
-					MediaItem.DEFAULT_SORT_ORDER);
+			if (includeLinks) {
+				c = getLinkedParentIdMediaCursor(contentResolver, MediaItem.PROJECTION_ALL, parentId,
+						MediaItem.DEFAULT_SORT_ORDER);
+			} else {
+				final String[] arguments1 = mArguments1;
+				arguments1[0] = parentId;
+				c = contentResolver.query(MediaItem.CONTENT_URI, MediaItem.PROJECTION_ALL, mMediaParentIdSelection,
+						arguments1, MediaItem.DEFAULT_SORT_ORDER);
+			}
 			if (c.getCount() > 0) {
 				while (c.moveToNext()) {
 					final MediaItem media = MediaItem.fromCursor(c);
