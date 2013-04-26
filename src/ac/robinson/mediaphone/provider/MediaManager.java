@@ -199,6 +199,37 @@ public class MediaManager {
 	}
 
 	/**
+	 * Get all frames that link to a specific media item.
+	 * 
+	 * @param contentResolver
+	 * @param mediaId
+	 * @return
+	 */
+	public static ArrayList<String> findLinkedParentIdsByMediaId(ContentResolver contentResolver, String mediaId) {
+		final ArrayList<String> parentIds = new ArrayList<String>();
+		final String[] arguments1 = mArguments1;
+		arguments1[0] = mediaId;
+		Cursor c = null;
+		try {
+			c = contentResolver.query(MediaItem.CONTENT_URI_LINK, MediaItem.PROJECTION_PARENT_ID,
+					mMediaInternalIdSelection, arguments1, null);
+
+			if (c.getCount() > 0) {
+				final int columnIndex = c.getColumnIndexOrThrow(MediaItem.PARENT_ID);
+				while (c.moveToNext()) {
+					final String linkId = c.getString(columnIndex);
+					parentIds.add(linkId);
+				}
+			}
+		} finally {
+			if (c != null) {
+				c.close();
+			}
+		}
+		return parentIds;
+	}
+
+	/**
 	 * Get all media items that are linked to a specific frame. Note: *only* includes links; not normal items
 	 * 
 	 * @param contentResolver
@@ -207,7 +238,6 @@ public class MediaManager {
 	 */
 	public static ArrayList<String> findLinkedMediaIdsByParentId(ContentResolver contentResolver, String parentId) {
 		final ArrayList<String> subIds = new ArrayList<String>();
-
 		final String[] arguments1 = mArguments1;
 		arguments1[0] = parentId;
 		Cursor c = null;

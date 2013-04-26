@@ -56,6 +56,8 @@ public class MediaItem implements BaseColumns {
 			FILE_EXTENSION, DURATION, TYPE, SPAN_FRAMES, DELETED };
 
 	public static final String[] PROJECTION_INTERNAL_ID = new String[] { INTERNAL_ID };
+	
+	public static final String[] PROJECTION_PARENT_ID = new String[] { PARENT_ID };
 
 	public static final String DEFAULT_SORT_ORDER = TYPE + " ASC, " + DATE_CREATED + " ASC";
 
