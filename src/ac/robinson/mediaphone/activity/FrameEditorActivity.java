@@ -141,57 +141,52 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 			return;
 		}
 
+		// make sure to always scroll to the correct frame even if we've done next/prev
+		saveLastEditedFrame(mFrameInternalId);
+
 		// delete frame/narrative if required
-		Resources resources = getResources();
 		ContentResolver contentResolver = getContentResolver();
 		final FrameItem editedFrame = FramesManager.findFrameByInternalId(contentResolver, mFrameInternalId);
+		String newStartFrameId = null;
+		String nextFrameId = null;
 		if (MediaManager.countMediaByParentId(contentResolver, mFrameInternalId) <= 0 || mDeleteFrameOnExit) {
 			// need the next frame id for scrolling (but before we update it to be deleted)
 			ArrayList<String> frameIds = FramesManager.findFrameIdsByParentId(contentResolver,
 					editedFrame.getParentId());
 
+			// save the next frame's id for updating icons/media; also deal with scrolling - if we're the first/last
+			// frame scroll to ensure frames don't show off screen TODO: do this in the horizontal list view instead
+			// (otherwise, there's no need to scroll - better to leave items in place than scroll to previous or next)
 			int numFrames = frameIds.size();
-			if (numFrames > 1) { // don't save if we're the last frame
-				int i = 0;
-				int foundId = -1;
-				for (String id : frameIds) {
-					if (mFrameInternalId.equals(id)) {
-						foundId = i;
-						break;
-					}
-					i += 1;
-				}
-				if (foundId >= 0) {
-					int idCount = numFrames - 2; // so we scroll to the last frame after this is deleted
-					foundId = foundId > idCount ? idCount : foundId;
-					saveLastEditedFrame(frameIds.get(foundId)); // scroll to this frame after exiting
+			if (numFrames > 1) {
+				int currentFrameIndex = frameIds.indexOf(mFrameInternalId);
+				if (currentFrameIndex == 0) {
+					nextFrameId = frameIds.get(1);
+					saveLastEditedFrame(newStartFrameId); // scroll to new first frame after exiting
+				} else if (currentFrameIndex > numFrames - 2) {
+					saveLastEditedFrame(frameIds.get(numFrames - 2)); // scroll to new last frame after exiting
+				} else {
+					nextFrameId = frameIds.get(currentFrameIndex + 1); // just store the frame to start updates from
 				}
 			}
 
+			// delete this frame
 			editedFrame.setDeleted(true);
 			FramesManager.updateFrame(contentResolver, editedFrame);
-		} else {
-			saveLastEditedFrame(mFrameInternalId); // so we always get the id even if we've done next/prev
-		}
 
-		// delete, or added no frame content
-		if (editedFrame.getDeleted()) {
-			// no narrative content - delete the narrative first for a better interface experience
-			// (don't have to wait for the frame to disappear)
-			int numFrames = FramesManager.countFramesByParentId(contentResolver, editedFrame.getParentId());
-			if (numFrames == 0) {
+			// if there's no narrative content after we've been deleted - delete the narrative first for a better
+			// interface experience (doing this means we don't have to wait for the frame icon to disappear)
+			if (numFrames == 1) {
 				NarrativeItem narrativeToDelete = NarrativesManager.findNarrativeByInternalId(contentResolver,
 						editedFrame.getParentId());
 				narrativeToDelete.setDeleted(true);
 				NarrativesManager.updateNarrative(contentResolver, narrativeToDelete);
 
-			} else if (numFrames > 0) {
-				// if we're the first frame, update the second frame's icon to be the main icon (i.e. with overlay)
-				FrameItem nextFrame = FramesManager
-						.findFirstFrameByParentId(contentResolver, editedFrame.getParentId());
-				if (editedFrame.getNarrativeSequenceId() < nextFrame.getNarrativeSequenceId()) {
-					FramesManager.reloadFrameIcon(resources, contentResolver, nextFrame, true);
-				}
+			} else if (numFrames > 1 && nextFrameId != null) {
+				// otherwise we need to delete our media from subsequent frames; always update the next frame's icon
+				ArrayList<String> frameComponents = MediaManager.findMediaIdsByParentId(contentResolver,
+						mFrameInternalId, false);
+				expandLinkedMediaAndDeleteItem(nextFrameId, null, frameComponents);
 			}
 		}
 

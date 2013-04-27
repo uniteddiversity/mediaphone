@@ -61,6 +61,10 @@ public class FramesManager {
 
 	public static void reloadFrameIcon(Resources resources, ContentResolver contentResolver, FrameItem frame,
 			boolean frameIsInDatabase) {
+		if (frame == null) {
+			return; // if run from switchFrames then the existing frame could have been deleted - ignore
+		}
+
 		final String frameCacheId = frame.getCacheId();
 		ImageCacheUtilities.setLoadingIcon(frameCacheId);
 

@@ -177,7 +177,7 @@ public class TextActivity extends MediaPhoneActivity {
 				}
 			} else {
 				// we've been deleted - propagate changes to our parent frame and any following frames
-				expandLinkedMediaAndDeleteItem(textMediaItem.getParentId(), textMediaItem);
+				expandLinkedMediaAndDeleteItem(textMediaItem.getParentId(), textMediaItem, null);
 			}
 
 			// save the id of the frame we're part of so that the frame editor gets notified

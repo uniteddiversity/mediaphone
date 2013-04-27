@@ -26,6 +26,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Hashtable;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1003,6 +1004,23 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	}
 
 	/**
+	 * Update a list of frame icons, removing from the cache first to ensure the old version is not displayed
+	 * 
+	 * @param frameIds
+	 */
+	private void updateMultipleFrameIcons(ArrayList<String> frameIds) {
+		for (String frameId : frameIds) {
+			ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(frameId));
+		}
+
+		Resources resources = getResources();
+		ContentResolver contentResolver = getContentResolver();
+		for (String frameId : frameIds) {
+			FramesManager.reloadFrameIcon(resources, contentResolver, frameId);
+		}
+	}
+
+	/**
 	 * Update the icon of the parent frame of the given media item; and, if this media item is spanning, update any
 	 * applicable frame icons after the one containing this media item (used when the media has changed)
 	 * 
@@ -1018,9 +1036,11 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		final boolean updateCurrentIcon;
 		if (preUpdateTask != null) {
 			preUpdateTask.run();
-			getFrameIconUpdaterRunnable(mediaItem.getParentId()).run();
+			FramesManager.reloadFrameIcon(getResources(), getContentResolver(), mediaItem.getParentId());
 			updateCurrentIcon = false;
 		} else {
+			// ensure the previous icon is not shown - remove from cache
+			ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(mediaItem.getParentId()));
 			updateCurrentIcon = true;
 		}
 
@@ -1044,16 +1064,13 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 
 			@Override
 			public void run() {
+				ContentResolver contentResolver = getContentResolver();
 				if (updateCurrentIcon) {
-					getFrameIconUpdaterRunnable(parentId).run();
+					FramesManager.reloadFrameIcon(getResources(), contentResolver, parentId);
 				}
 
 				// update all frame items that link to this media item
-				ArrayList<String> frameIds = MediaManager
-						.findLinkedParentIdsByMediaId(getContentResolver(), internalId);
-				for (String parentId : frameIds) {
-					getFrameIconUpdaterRunnable(parentId).run();
-				}
+				updateMultipleFrameIcons(MediaManager.findLinkedParentIdsByMediaId(contentResolver, internalId));
 			}
 		});
 	}
@@ -1122,9 +1139,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// finally, update icons for changed frames
-				for (String frameId : iconsToUpdate) {
-					getFrameIconUpdaterRunnable(frameId).run();
-				}
+				updateMultipleFrameIcons(iconsToUpdate);
 			}
 		});
 
@@ -1136,13 +1151,16 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 
 	/**
 	 * Make sure any linked media prior to the given frame is propagated to that frame and any after it that apply. Will
-	 * always update the current frame's icon. Used when deleting a media item or frame.
+	 * always update startFrameId's icon. Used when deleting a media item or frame.
 	 * 
 	 * @param startFrameId
-	 * @param deletedMediaItem a media item from startFrameId that will be deleted here, and so should also be checked
-	 *            in the following frames for spanning (may be null)
+	 * @param mediaItemToDelete a media item from startFrameId that will be deleted here, and so should also be checked
+	 *            in the following frames for spanning - used only from media activities (may be null)
+	 * @param frameMediaItemsToDelete a list of media item ids that should be removed from startFrameId and all
+	 *            following frames - used only from frame editor (may be null)
 	 */
-	public void expandLinkedMediaAndDeleteItem(final String startFrameId, final MediaItem deletedMediaItem) {
+	public void expandLinkedMediaAndDeleteItem(final String startFrameId, final MediaItem mediaItemToDelete,
+			final ArrayList<String> frameMediaItemsToDelete) {
 
 		// first get a list of the frames that could need updating
 		ContentResolver contentResolver = getContentResolver();
@@ -1152,28 +1170,48 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			return; // no frames found - error; won't be able to update anything
 		}
 
+		// and a list of icons that we will need to update
+		// this also fixes an issue where database conflicts were occurring (random quits) in the task thread
+		final ArrayList<String> iconsToUpdate = new ArrayList<String>();
+		if (mediaItemToDelete != null) {
+			iconsToUpdate.addAll(MediaManager.findLinkedParentIdsByMediaId(contentResolver,
+					mediaItemToDelete.getInternalId()));
+		}
+		if (frameMediaItemsToDelete != null) {
+			for (String mediaId : frameMediaItemsToDelete) {
+				iconsToUpdate.addAll(MediaManager.findLinkedParentIdsByMediaId(contentResolver, mediaId));
+			}
+		}
+		// remove duplicates by adding to a hash set then retrieving (LinkedHashSet also preserves order)
+		LinkedHashSet<String> setItems = new LinkedHashSet<String>(iconsToUpdate);
+		iconsToUpdate.clear();
+		iconsToUpdate.addAll(setItems);
+
+		// when using from the frame editor the previous icons are briefly displayed - remove from cache to prevent this
+		// - we won't definitely be updating all of these, but removing from the cache gives a better experience
+		ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(startFrameId));
+		for (String frameId : iconsToUpdate) {
+			ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(frameId));
+		}
+
 		// save loading things twice if we can
 		final ArrayList<MediaItem> previousMedia;
-		final ArrayList<String> linkedFrames;
 
 		// because we delete and propagate all icons at once, the current frame's propagated media may not have been
 		// updated by the time we return, and may not show in the frame editor - to deal with this we propagate the
 		// current frame's media first, on the UI thread, but only for the type of deletedMediaItem (no others apply)
-		if (deletedMediaItem != null && narrativeFrameIds.size() >= 1) { // >= 1 so we have at least the previous
-
-			// get a list of linked items in this thread as conflicts were occurring (random quits) in the task thread
-			linkedFrames = MediaManager.findLinkedParentIdsByMediaId(contentResolver, deletedMediaItem.getInternalId());
+		if (mediaItemToDelete != null && narrativeFrameIds.size() >= 1) { // >= 1 so we have at least the previous
 
 			// we end up deleting this twice; fine because we're only setting deleted (rather than actually removing)
-			deletedMediaItem.setDeleted(true);
-			MediaManager.updateMedia(contentResolver, deletedMediaItem);
+			mediaItemToDelete.setDeleted(true);
+			MediaManager.updateMedia(contentResolver, mediaItemToDelete);
 
 			// now link the previous frame's media of this type (if not currently linked)
 			String previousFrameId = narrativeFrameIds.get(0);
-			int mediaType = deletedMediaItem.getType();
+			int mediaType = mediaItemToDelete.getType();
 			if (previousFrameId != null) {
 				ArrayList<String> currentMedia = MediaManager.findLinkedMediaIdsByParentId(contentResolver,
-						startFrameId);
+						startFrameId); // need to compare with existing links so we don't re-add audio when deleting one
 				previousMedia = MediaManager.findMediaByParentId(contentResolver, previousFrameId);
 				for (MediaItem media : previousMedia) {
 					final String mediaId = media.getInternalId();
@@ -1186,7 +1224,6 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			}
 		} else {
 			previousMedia = null;
-			linkedFrames = null;
 		}
 
 		// because database access can take time, we need to do db and icon updates in the same thread
@@ -1204,12 +1241,21 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			@Override
 			public void run() {
 
-				// first, delete the media item if requested - we've actually already deleted, but need to make sure
-				// that this item is deleted in this thread, so updates we get are in sync (deleting twice is fine)
+				// first, delete the media items as requested - we've actually already deleted mediaItemToDelete, but
+				// need to make sure that it's deleted in this thread, so updates are in sync (deleting twice is fine)
 				ContentResolver contentResolver = getContentResolver();
-				if (deletedMediaItem != null) {
-					deletedMediaItem.setDeleted(true);
-					MediaManager.updateMedia(contentResolver, deletedMediaItem);
+				if (frameMediaItemsToDelete != null) {
+					for (String mediaId : frameMediaItemsToDelete) {
+						final MediaItem deletedMedia = MediaManager.findMediaByInternalId(contentResolver, mediaId);
+						if (deletedMedia != null) {
+							deletedMedia.setDeleted(true);
+							MediaManager.updateMedia(contentResolver, deletedMedia);
+						}
+					}
+				}
+				if (mediaItemToDelete != null) {
+					mediaItemToDelete.setDeleted(true);
+					MediaManager.updateMedia(contentResolver, mediaItemToDelete);
 				}
 
 				// check we have enough frames to operate on
@@ -1217,7 +1263,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					case 0:
 						return; // nothing to do - no frames found, so we won't be able to update the icon
 					case 1:
-						getFrameIconUpdaterRunnable(startFrameId).run();
+						FramesManager.reloadFrameIcon(getResources(), contentResolver, startFrameId);
 						return; // nothing do do - we only have the previous frame, and have already propagated/deleted
 				}
 
@@ -1243,30 +1289,28 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					}
 				}
 
-				// we only need to remove the deleted media from other frames if it was a frame-spanning item
-				final String deletedMediaId = (deletedMediaItem != null && deletedMediaItem.getSpanFrames()) ? deletedMediaItem
-						.getInternalId() : null;
-				if (prevMedia.size() == 0 && deletedMediaId == null) {
+				// check that we still have media or icons to update
+				if (prevMedia.size() == 0 && iconsToUpdate.size() == 0) {
 					// no spanning items or media to delete; nothing to do except update the current frame's icon
-					getFrameIconUpdaterRunnable(startFrameId).run();
+					FramesManager.reloadFrameIcon(getResources(), contentResolver, startFrameId);
 					return;
 				}
 
-				// hold a list of icons to update, so we only update each icon once at most; start with known links
-				ArrayList<String> iconsToUpdate;
-				if (linkedFrames != null) {
-					iconsToUpdate = linkedFrames;
-				} else {
-					iconsToUpdate = MediaManager.findLinkedParentIdsByMediaId(contentResolver, deletedMediaId);
+				// must always update the current icon (first for better appearance)
+				iconsToUpdate.add(0, startFrameId);
+
+				// if we're removing a frame's media, we need to add the current frame to propagate media - in this
+				// case, startFrameId is the frame after the deleted frame, rather than the frame media is removed from
+				if (frameMediaItemsToDelete != null) {
+					narrativeFrameIds.add(0, startFrameId);
 				}
-				iconsToUpdate.add(0, startFrameId); // must always update the current icon (first for better appearance)
 
 				// now remove previously propagated media and propagate media from earlier frames
 				boolean deletedMediaComplete = false;
 				for (final String frameId : narrativeFrameIds) {
 
 					// update icons to remove this media item from its propagated frames
-					if (deletedMediaId != null && !deletedMediaComplete) {
+					if (!deletedMediaComplete) {
 
 						// delete frames that are now blank
 						if (iconsToUpdate.contains(frameId)) {
@@ -1278,7 +1322,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 								FramesManager.updateFrame(contentResolver, frameToDelete);
 							}
 						} else {
-							// we've reached the end of this media's spanning if there's no link to a frame
+							// we've reached the end of spanning media if there's no link to a frame
 							deletedMediaComplete = true;
 						}
 					}
@@ -1305,7 +1349,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 							for (MediaItem propagatedMedia : prevMedia) {
 								MediaManager.addMediaLink(contentResolver, frameId, propagatedMedia.getInternalId());
 							}
-							if (!iconsToUpdate.contains(frameId)) { // only add items we haven't already processed
+							if (!iconsToUpdate.contains(frameId)) { // only add items we haven't already queued
 								iconsToUpdate.add(frameId);
 							}
 						}
@@ -1315,15 +1359,18 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					}
 				}
 
-				// remove all links to the deleted media item
-				if (deletedMediaId != null) {
-					MediaManager.deleteMediaLinks(contentResolver, deletedMediaId);
+				// remove all links to the deleted media items
+				if (mediaItemToDelete != null) {
+					MediaManager.deleteMediaLinks(contentResolver, mediaItemToDelete.getInternalId());
+				}
+				if (frameMediaItemsToDelete != null) {
+					for (String mediaLink : frameMediaItemsToDelete) {
+						MediaManager.deleteMediaLinks(contentResolver, mediaLink);
+					}
 				}
 
-				// finally, update icons for changed frames (must be done last so the link no longer exists)
-				for (String frameId : iconsToUpdate) {
-					getFrameIconUpdaterRunnable(frameId).run();
-				}
+				// finally, update icons for changed frames (must be done last so the links no longer exist)
+				updateMultipleFrameIcons(iconsToUpdate);
 			}
 		});
 	}
@@ -1400,6 +1447,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 						if (!mediaFound) {
 							// add a linked media element and update the icon of the frame in question
 							MediaManager.addMediaLink(contentResolver, frameId, mediaId);
+							ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(frameId)); // for better ui flow
 							iconsToUpdate.add(frameId);
 						} else {
 							break;
@@ -1408,9 +1456,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// finally, update icons for changed frames (must be done last so the link no longer exists)
-				for (String frameId : iconsToUpdate) {
-					getFrameIconUpdaterRunnable(frameId).run();
-				}
+				updateMultipleFrameIcons(iconsToUpdate);
 			}
 		});
 
@@ -2458,6 +2504,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		};
 	}
 
+	@Deprecated
 	protected BackgroundRunnable getFrameIconUpdaterRunnable(final String frameInternalId) {
 		return new BackgroundRunnable() {
 			@Override

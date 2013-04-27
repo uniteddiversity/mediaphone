@@ -326,10 +326,22 @@ public class MediaManager {
 	}
 
 	public static ArrayList<String> findMediaIdsByParentId(ContentResolver contentResolver, String parentId) {
+		return findMediaIdsByParentId(contentResolver, parentId, true);
+	}
+
+	public static ArrayList<String> findMediaIdsByParentId(ContentResolver contentResolver, String parentId,
+			boolean includeLinks) {
 		final ArrayList<String> mediaIds = new ArrayList<String>();
 		Cursor c = null;
 		try {
-			c = getLinkedParentIdMediaCursor(contentResolver, MediaItem.PROJECTION_INTERNAL_ID, parentId, null);
+			if (includeLinks) {
+				c = getLinkedParentIdMediaCursor(contentResolver, MediaItem.PROJECTION_INTERNAL_ID, parentId, null);
+			} else {
+				final String[] arguments1 = mArguments1;
+				arguments1[0] = parentId;
+				c = contentResolver.query(MediaItem.CONTENT_URI, MediaItem.PROJECTION_INTERNAL_ID,
+						mMediaParentIdSelection, arguments1, MediaItem.DEFAULT_SORT_ORDER);
+			}
 			if (c.getCount() > 0) {
 				final int columnIndex = c.getColumnIndexOrThrow(MediaItem.INTERNAL_ID);
 				while (c.moveToNext()) {
