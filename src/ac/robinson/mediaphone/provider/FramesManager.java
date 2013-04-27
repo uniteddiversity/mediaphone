@@ -113,7 +113,7 @@ public class FramesManager {
 
 	/**
 	 * Note: to delete a frame item, do setDeleted on the item itself and then update to the database. On the next
-	 * application launch, the frame's media files will be deleted and the database entry will be cleaned up. This
+	 * application exit, the frame's media files will be deleted and the database entry will be cleaned up. This
 	 * approach speeds up interaction and means that we only need one background thread semi-regularly for deletion
 	 */
 	public static boolean deleteFrameFromBackgroundTask(ContentResolver contentResolver, String frameId) {
@@ -234,16 +234,16 @@ public class FramesManager {
 		return null;
 	}
 
-	public static int findLastFrameNarrativeSequenceId(ContentResolver contentResolver, String parentId) {
+	public static String findLastFrameByParentId(ContentResolver contentResolver, String parentId) {
 		final String[] arguments1 = mArguments1;
 		arguments1[0] = parentId;
 		Cursor c = null;
 		try {
-			c = contentResolver.query(FrameItem.CONTENT_URI, FrameItem.PROJECTION_SEQEUENCE_ID,
-					mFrameParentIdSelection, arguments1, FrameItem.DEFAULT_SORT_ORDER);
+			c = contentResolver.query(FrameItem.CONTENT_URI, FrameItem.PROJECTION_INTERNAL_ID, mFrameParentIdSelection,
+					arguments1, FrameItem.DEFAULT_SORT_ORDER);
 			if (c.moveToLast()) {
 				// for speed, don't get the whole FrameItem
-				final int lastId = c.getInt(c.getColumnIndexOrThrow(FrameItem.SEQUENCE_ID));
+				final String lastId = c.getString(c.getColumnIndexOrThrow(FrameItem.INTERNAL_ID));
 				return lastId;
 			}
 		} finally {
@@ -251,13 +251,13 @@ public class FramesManager {
 				c.close();
 			}
 		}
-		return -1; // no existing frames (but should not happen)
+		return null; // no existing frames (but should not happen)
 	}
 
 	public static int countFramesByParentId(ContentResolver contentResolver, String parentId) {
 		final String[] arguments1 = mArguments1;
 		arguments1[0] = parentId;
-		Cursor c = contentResolver.query(FrameItem.CONTENT_URI, FrameItem.PROJECTION_SEQEUENCE_ID, // doesn't matter
+		Cursor c = contentResolver.query(FrameItem.CONTENT_URI, FrameItem.PROJECTION_INTERNAL_ID,
 				mFrameParentIdSelection, arguments1, FrameItem.DEFAULT_SORT_ORDER);
 		final int count = c.getCount();
 		c.close();

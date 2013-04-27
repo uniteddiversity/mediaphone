@@ -795,16 +795,25 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		}
 
 		// create a new frame (but don't load the its icon yet - it will be loaded (or deleted) when we return)
-		String narrativeId = existingParent.getParentId();
+		final String narrativeId = existingParent.getParentId();
 		final FrameItem newFrame = new FrameItem(narrativeId, -1);
-		FramesManager.addFrame(getResources(), contentResolver, newFrame, false);
+		final String newFrameId = newFrame.getInternalId();
+		FramesManager.addFrame(getResources(), contentResolver, newFrame, false); // must add before calculating seq id
+
+		// get and update any inherited media
+		ArrayList<MediaItem> inheritedMedia = MediaManager.findMediaByParentId(contentResolver, insertAfterId);
+		for (final MediaItem media : inheritedMedia) {
+			if (media.getSpanFrames()) {
+				MediaManager.addMediaLink(contentResolver, newFrameId, media.getInternalId());
+			}
+		}
 
 		// get and update the required narrative sequence id
-		int narrativeSequenceId = adjustNarrativeSequenceIds(narrativeId, null, insertAfterId);
+		final int narrativeSequenceId = adjustNarrativeSequenceIds(narrativeId, insertAfterId);
 		newFrame.setNarrativeSequenceId(narrativeSequenceId);
 		FramesManager.updateFrame(contentResolver, newFrame);
 
-		return newFrame.getInternalId();
+		return newFrameId;
 	}
 
 	/**
@@ -813,58 +822,50 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	 * by the caller. Note: the new frame must have already been added to the database.
 	 * 
 	 * @param narrativeId
-	 * @param insertBeforeId
 	 * @param insertAfterId
 	 * @return The sequence id that should be used for the new frame
 	 */
-	protected int adjustNarrativeSequenceIds(String narrativeId, String insertBeforeId, String insertAfterId) {
+	protected int adjustNarrativeSequenceIds(String narrativeId, String insertAfterId) {
 		// note: not a background task any more, because it causes concurrency problems with deleting after back press
 		Resources res = getResources();
 		ContentResolver contentResolver = getContentResolver();
 		int narrativeSequenceIdIncrement = res.getInteger(R.integer.frame_narrative_sequence_increment);
 		int narrativeSequenceId = 0;
 
-		// default to inserting at the end if no before/after id is given
-		if (insertBeforeId == null && insertAfterId == null) {
-			narrativeSequenceId = FramesManager.findLastFrameNarrativeSequenceId(contentResolver, narrativeId)
-					+ narrativeSequenceIdIncrement;
+		// insert new frame - increment necessary frames after the new frame's position
+		boolean insertAtStart = FrameItem.KEY_FRAME_ID_START.equals(insertAfterId);
+		ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, narrativeId);
+		narrativeFrames.remove(0); // don't edit the newly inserted frame yet
 
-		} else {
-			// insert new frame - increment necessary frames after the new frame's position
-			boolean insertAtStart = FrameItem.KEY_FRAME_ID_START.equals(insertBeforeId);
-			ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, narrativeId);
-			narrativeFrames.remove(0); // don't edit the newly inserted frame yet
+		int previousNarrativeSequenceId = -1;
+		boolean frameFound = false;
+		for (FrameItem frame : narrativeFrames) {
+			if (!frameFound && insertAtStart) {
+				frameFound = true;
+				narrativeSequenceId = frame.getNarrativeSequenceId();
+			}
+			if (frameFound) {
+				int currentNarrativeSequenceId = frame.getNarrativeSequenceId();
+				if (currentNarrativeSequenceId <= narrativeSequenceId
+						|| currentNarrativeSequenceId <= previousNarrativeSequenceId) {
 
-			int previousNarrativeSequenceId = -1;
-			boolean frameFound = false;
-			for (FrameItem frame : narrativeFrames) {
-				if (!frameFound && (insertAtStart || frame.getInternalId().equals(insertBeforeId))) {
-					frameFound = true;
-					narrativeSequenceId = frame.getNarrativeSequenceId();
-				}
-				if (frameFound) {
-					int currentNarrativeSequenceId = frame.getNarrativeSequenceId();
-					if (currentNarrativeSequenceId <= narrativeSequenceId
-							|| currentNarrativeSequenceId <= previousNarrativeSequenceId) {
-
-						frame.setNarrativeSequenceId(currentNarrativeSequenceId
-								+ Math.max(narrativeSequenceId - currentNarrativeSequenceId,
-										previousNarrativeSequenceId - currentNarrativeSequenceId) + 1);
-						if (insertAtStart) {
-							FramesManager.updateFrame(res, contentResolver, frame, true); // TODO: background task?
-							insertAtStart = false;
-						} else {
-							FramesManager.updateFrame(contentResolver, frame);
-						}
-						previousNarrativeSequenceId = frame.getNarrativeSequenceId();
+					frame.setNarrativeSequenceId(currentNarrativeSequenceId
+							+ Math.max(narrativeSequenceId - currentNarrativeSequenceId, previousNarrativeSequenceId
+									- currentNarrativeSequenceId) + 1);
+					if (insertAtStart) {
+						FramesManager.updateFrame(res, contentResolver, frame, true); // TODO: background task?
+						insertAtStart = false;
 					} else {
-						break;
+						FramesManager.updateFrame(contentResolver, frame);
 					}
+					previousNarrativeSequenceId = frame.getNarrativeSequenceId();
+				} else {
+					break;
 				}
-				if (!frameFound && frame.getInternalId().equals(insertAfterId)) {
-					frameFound = true;
-					narrativeSequenceId = frame.getNarrativeSequenceId() + narrativeSequenceIdIncrement;
-				}
+			}
+			if (!frameFound && frame.getInternalId().equals(insertAfterId)) {
+				frameFound = true;
+				narrativeSequenceId = frame.getNarrativeSequenceId() + narrativeSequenceIdIncrement;
 			}
 		}
 
@@ -975,11 +976,14 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			previousFrameId = frameId;
 		}
 
+		// remove irrelevant frames; preserve previous if necessary
 		if (includePrevious) {
 			idsToRemove.remove(previousFrameId);
 		}
-
 		narrativeFrameIds.removeAll(idsToRemove);
+		if (includePrevious && previousFrameId == null) {
+			narrativeFrameIds.add(0, null); // need this null to show that no previous frame is present
+		}
 		return narrativeFrameIds;
 	}
 
@@ -1159,7 +1163,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	 * @param frameMediaItemsToDelete a list of media item ids that should be removed from startFrameId and all
 	 *            following frames - used only from frame editor (may be null)
 	 */
-	public void expandLinkedMediaAndDeleteItem(final String startFrameId, final MediaItem mediaItemToDelete,
+	protected void expandLinkedMediaAndDeleteItem(final String startFrameId, final MediaItem mediaItemToDelete,
 			final ArrayList<String> frameMediaItemsToDelete) {
 
 		// first get a list of the frames that could need updating
@@ -2212,8 +2216,18 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		public abstract boolean getShowDialog();
 	}
 
-	protected Runnable getMediaCleanupRunnable() {
-		return new Runnable() {
+	protected BackgroundRunnable getMediaCleanupRunnable() {
+		return new BackgroundRunnable() {
+			@Override
+			public int getTaskId() {
+				return 0;
+			}
+
+			@Override
+			public boolean getShowDialog() {
+				return false;
+			}
+
 			@Override
 			public void run() {
 				ContentResolver contentResolver = getContentResolver();
@@ -2230,13 +2244,15 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// find media marked as deleted, and also media whose parent frame is marked as deleted
+				// (but not inherited links)
 				ArrayList<String> deletedMedia = MediaManager.findDeletedMedia(contentResolver);
 				for (String frameId : deletedFrames) {
-					deletedMedia.addAll(MediaManager.findMediaIdsByParentId(contentResolver, frameId));
+					deletedMedia.addAll(MediaManager.findMediaIdsByParentId(contentResolver, frameId, false));
 				}
 
-				// delete the actual media items on disk and from the database
+				// delete the actual media items on disk and the items and any links to them from the database
 				int deletedMediaCount = 0;
+				int deletedLinkCount = 0;
 				for (String mediaId : deletedMedia) {
 					final MediaItem mediaToDelete = MediaManager.findMediaByInternalId(contentResolver, mediaId);
 					if (mediaToDelete != null) {
@@ -2248,6 +2264,15 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 						}
 						MediaManager.deleteMediaFromBackgroundTask(contentResolver, mediaId);
 					}
+
+					// links should have already been removed, but we might as well check for stragglers
+					deletedLinkCount += MediaManager.deleteMediaLinks(contentResolver, mediaId);
+				}
+
+				// remove links marked as deleted
+				ArrayList<String> deletedLinks = MediaManager.findDeletedMediaLinks(contentResolver);
+				for (String linkId : deletedLinks) {
+					MediaManager.deleteMediaLinkFromBackgroundTask(contentResolver, linkId);
 				}
 
 				// delete the actual frame items on disk and from the database
@@ -2275,10 +2300,10 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// report progress
-				Log.d(DebugUtilities.getLogTag(this), "Media cleanup: removed " + deletedNarratives.size() + "/"
+				Log.i(DebugUtilities.getLogTag(this), "Media cleanup: removed " + deletedNarratives.size() + "/"
 						+ deletedTemplates.size() + " narratives/templates, " + deletedFrames.size() + " ("
 						+ deletedFrameCount + ") frames, and " + deletedMedia.size() + " (" + deletedMediaCount
-						+ ") media items");
+						+ ") media items (" + deletedLinks.size() + "/" + deletedLinkCount + " links)");
 			}
 		};
 	}

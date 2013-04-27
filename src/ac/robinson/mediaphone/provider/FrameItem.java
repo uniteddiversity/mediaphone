@@ -56,8 +56,6 @@ public class FrameItem implements BaseColumns {
 	public static final String[] PROJECTION_ALL = new String[] { FrameItem._ID, FrameItem.INTERNAL_ID,
 			FrameItem.PARENT_ID, FrameItem.SEQUENCE_ID, FrameItem.DATE_CREATED, FrameItem.DELETED };
 
-	public static final String[] PROJECTION_SEQEUENCE_ID = new String[] { FrameItem.SEQUENCE_ID };
-
 	public static final String[] PROJECTION_INTERNAL_ID = new String[] { FrameItem.INTERNAL_ID };
 
 	public static enum NavigationMode {

@@ -66,7 +66,6 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	private String mFrameInternalId;
 	private boolean mHasEditedMedia = false;
 	private boolean mShowOptionsMenu = false;
-	private boolean mAddNewFrame = false;
 	private String mReloadImagePath = null;
 	private boolean mDeleteFrameOnExit = false;
 
@@ -111,24 +110,18 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
 		if (hasFocus) {
-			if (mAddNewFrame) {
-				mAddNewFrame = false;
-				addNewFrame();
-				saveLastEditedFrame(mFrameInternalId); // this is now the last edited frame
-			} else {
-				// change the frame that is displayed, if applicable
-				changeFrames(loadLastEditedFrame());
+			// change the frame that is displayed, if applicable
+			changeFrames(loadLastEditedFrame());
 
-				// do image loading here so that we know the layout's size for sizing the image
-				if (mReloadImagePath != null) {
-					reloadFrameImage(mReloadImagePath);
-					mReloadImagePath = null;
-				}
+			// do image loading here so that we know the layout's size for sizing the image
+			if (mReloadImagePath != null) {
+				reloadFrameImage(mReloadImagePath);
+				mReloadImagePath = null;
+			}
 
-				if (mShowOptionsMenu) {
-					mShowOptionsMenu = false;
-					openOptionsMenu();
-				}
+			if (mShowOptionsMenu) {
+				mShowOptionsMenu = false;
+				openOptionsMenu();
 			}
 			registerForSwipeEvents(); // here to avoid crashing due to double-swiping
 		}
@@ -144,12 +137,12 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		// make sure to always scroll to the correct frame even if we've done next/prev
 		saveLastEditedFrame(mFrameInternalId);
 
-		// delete frame/narrative if required
+		// delete frame/narrative if required; don't allow frames with just links and no actual media
 		ContentResolver contentResolver = getContentResolver();
 		final FrameItem editedFrame = FramesManager.findFrameByInternalId(contentResolver, mFrameInternalId);
 		String newStartFrameId = null;
 		String nextFrameId = null;
-		if (MediaManager.countMediaByParentId(contentResolver, mFrameInternalId) <= 0 || mDeleteFrameOnExit) {
+		if (MediaManager.countMediaByParentId(contentResolver, mFrameInternalId, false) <= 0 || mDeleteFrameOnExit) {
 			// need the next frame id for scrolling (but before we update it to be deleted)
 			ArrayList<String> frameIds = FramesManager.findFrameIdsByParentId(contentResolver,
 					editedFrame.getParentId());
@@ -293,7 +286,6 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	}
 
 	private void loadFrameElements() {
-		mAddNewFrame = false;
 		if (mFrameInternalId == null) {
 			// editing an existing frame
 			final Intent intent = getIntent();
@@ -304,7 +296,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 
 			// adding a new frame
 			if (mFrameInternalId == null) {
-				mAddNewFrame = true;
+				addNewFrame();
 			}
 		}
 
@@ -325,51 +317,48 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		mTextInherited = null;
 
 		// load existing content into buttons (no need to do any of this on new frames)
-		// TODO: deal with inherited media on new frames...
-		if (!mAddNewFrame) {
-			ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(getContentResolver(),
-					mFrameInternalId);
-			boolean imageLoaded = false;
-			boolean audioLoaded = false;
-			boolean textLoaded = false;
-			for (MediaItem currentItem : frameComponents) {
-				final int currentType = currentItem.getType();
-				if (!imageLoaded
-						&& (currentType == MediaPhoneProvider.TYPE_IMAGE_BACK
-								|| currentType == MediaPhoneProvider.TYPE_IMAGE_FRONT || currentType == MediaPhoneProvider.TYPE_VIDEO)) {
-					mReloadImagePath = currentItem.getFile().getAbsolutePath();
-					mImageInherited = (currentItem.getSpanFrames() && !currentItem.getParentId().equals(
-							mFrameInternalId)) ? currentItem.getInternalId() : null;
-					if (mImageInherited != null) {
-						// this was originally going to be done in onDraw of CenteredImageTextButton, but there's a
-						// bizarre bug that causes the canvas to be translated just over 8000 pixels to the left before
-						// it's given to our onDraw method - instead we now use a layer drawable when loading
-					}
-					imageLoaded = true;
-
-				} else if (!audioLoaded && currentType == MediaPhoneProvider.TYPE_AUDIO) {
-					mFrameAudioItems.put(currentItem.getInternalId(), currentItem.getDurationMilliseconds());
-					mAudioInherited[mFrameAudioItems.size() - 1] = (currentItem.getSpanFrames() && !currentItem
-							.getParentId().equals(mFrameInternalId)) ? currentItem.getInternalId() : null;
-					if (mFrameAudioItems.size() >= MAX_AUDIO_ITEMS) {
-						audioLoaded = true;
-					}
-
-				} else if (!textLoaded && currentType == MediaPhoneProvider.TYPE_TEXT) {
-					String textSnippet = IOUtilities.getFileContentSnippet(currentItem.getFile().getAbsolutePath(),
-							getResources().getInteger(R.integer.text_snippet_length));
-					textButton.setText(textSnippet);
-					mTextInherited = (currentItem.getSpanFrames() && !currentItem.getParentId()
-							.equals(mFrameInternalId)) ? currentItem.getInternalId() : null;
-					if (mTextInherited != null) {
-						textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text_locked, 0, 0);
-					}
-					textLoaded = true;
+		ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(getContentResolver(), mFrameInternalId);
+		boolean imageLoaded = false;
+		boolean audioLoaded = false;
+		boolean textLoaded = false;
+		for (MediaItem currentItem : frameComponents) {
+			final int currentType = currentItem.getType();
+			if (!imageLoaded
+					&& (currentType == MediaPhoneProvider.TYPE_IMAGE_BACK
+							|| currentType == MediaPhoneProvider.TYPE_IMAGE_FRONT || currentType == MediaPhoneProvider.TYPE_VIDEO)) {
+				mReloadImagePath = currentItem.getFile().getAbsolutePath();
+				mImageInherited = (currentItem.getSpanFrames() && !currentItem.getParentId().equals(mFrameInternalId)) ? currentItem
+						.getInternalId() : null;
+				if (mImageInherited != null) {
+					// this was originally going to be done in onDraw of CenteredImageTextButton, but there's a
+					// bizarre bug that causes the canvas to be translated just over 8000 pixels to the left before
+					// it's given to our onDraw method - instead we now use a layer drawable when loading
 				}
-			}
+				imageLoaded = true;
 
-			saveLastEditedFrame(mFrameInternalId); // this is now the last edited frame
+			} else if (!audioLoaded && currentType == MediaPhoneProvider.TYPE_AUDIO) {
+				mFrameAudioItems.put(currentItem.getInternalId(), currentItem.getDurationMilliseconds());
+				mAudioInherited[mFrameAudioItems.size() - 1] = (currentItem.getSpanFrames() && !currentItem
+						.getParentId().equals(mFrameInternalId)) ? currentItem.getInternalId() : null;
+				if (mFrameAudioItems.size() >= MAX_AUDIO_ITEMS) {
+					audioLoaded = true;
+				}
+
+			} else if (!textLoaded && currentType == MediaPhoneProvider.TYPE_TEXT) {
+				String textSnippet = IOUtilities.getFileContentSnippet(currentItem.getFile().getAbsolutePath(),
+						getResources().getInteger(R.integer.text_snippet_length));
+				textButton.setText(textSnippet);
+				mTextInherited = (currentItem.getSpanFrames() && !currentItem.getParentId().equals(mFrameInternalId)) ? currentItem
+						.getInternalId() : null;
+				if (mTextInherited != null) {
+					textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text_locked, 0, 0);
+				}
+				textLoaded = true;
+			}
 		}
+
+		// this is now the last edited frame - save our position
+		saveLastEditedFrame(mFrameInternalId);
 
 		// update the interface (image is loaded in onWindowFocusChanged so we know the button's size)
 		reloadAudioButtons();
@@ -383,14 +372,17 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 			return;
 		}
 
+		ContentResolver contentResolver = getContentResolver();
 		String intentNarrativeId = intent.getStringExtra(getString(R.string.extra_parent_id));
 		final boolean insertNewNarrative = intentNarrativeId == null;
 		final String narrativeId = insertNewNarrative ? MediaPhoneProvider.getNewInternalId() : intentNarrativeId;
-		final String insertBeforeId = intent.getStringExtra(getString(R.string.extra_insert_before_id));
-		final String insertAfterId = intent.getStringExtra(getString(R.string.extra_insert_after_id));
+
+		// default to inserting at the end if no before/after id is given
+		final String afterId = intent.getStringExtra(getString(R.string.extra_insert_after_id));
+		final String insertAfterId = afterId == null ? FramesManager.findLastFrameByParentId(contentResolver,
+				narrativeId) : afterId;
 
 		// don't load the frame's icon yet - it will be loaded (or deleted) when we return
-		ContentResolver contentResolver = getContentResolver();
 		FrameItem newFrame = new FrameItem(narrativeId, -1);
 		FramesManager.addFrame(getResources(), contentResolver, newFrame, false);
 		mFrameInternalId = newFrame.getInternalId();
@@ -403,7 +395,17 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 			NarrativesManager.addNarrative(contentResolver, newNarrative);
 
 		} else {
-			narrativeSequenceId = adjustNarrativeSequenceIds(narrativeId, insertBeforeId, insertAfterId);
+			narrativeSequenceId = adjustNarrativeSequenceIds(narrativeId, insertAfterId);
+
+			if (insertAfterId != null && !FrameItem.KEY_FRAME_ID_START.equals(insertAfterId)) {
+				// get and update any inherited media
+				ArrayList<MediaItem> inheritedMedia = MediaManager.findMediaByParentId(contentResolver, insertAfterId);
+				for (final MediaItem media : inheritedMedia) {
+					if (media.getSpanFrames()) {
+						MediaManager.addMediaLink(contentResolver, mFrameInternalId, media.getInternalId());
+					}
+				}
+			}
 		}
 
 		newFrame.setNarrativeSequenceId(narrativeSequenceId);

@@ -76,8 +76,8 @@ public class MediaManager {
 
 	/**
 	 * Note: to delete a media item, do setDeleted on the item itself and then update to the database. On the next
-	 * application launch, the media file will be deleted and the database entry will be cleaned up. This approach is
-	 * used to speed up interaction and so that we only need to run one background thread semi-regularly for deletion
+	 * application exit, the media file will be deleted and the database entry will be cleaned up. This approach is used
+	 * to speed up interaction and so that we only need to run one background thread semi-regularly for deletion
 	 */
 	public static boolean deleteMediaFromBackgroundTask(ContentResolver contentResolver, String internalId) {
 		final String[] arguments1 = mArguments1;
@@ -131,6 +131,18 @@ public class MediaManager {
 		int count = contentResolver.update(MediaItem.CONTENT_URI_LINK, contentValues,
 				mMediaInternalIdAndParentIdSelection, arguments2);
 		return count == 1;
+	}
+
+	/**
+	 * Note: to delete a media link, use deleteMediaLink to set deleted, rather than actually removing. On the next
+	 * application exit, the link will be deleted and the database entry will be cleaned up. This approach is used to
+	 * speed up interaction and so that we only need to run one background thread semi-regularly for deletion
+	 */
+	public static boolean deleteMediaLinkFromBackgroundTask(ContentResolver contentResolver, String internalId) {
+		final String[] arguments1 = mArguments1;
+		arguments1[0] = internalId;
+		int count = contentResolver.delete(MediaItem.CONTENT_URI_LINK, mMediaInternalIdSelection, arguments1);
+		return count > 0;
 	}
 
 	public static boolean updateMedia(ContentResolver contentResolver, MediaItem media) {
@@ -381,13 +393,19 @@ public class MediaManager {
 		}
 	}
 
-	// TODO: delete links
 	public static ArrayList<String> findDeletedMedia(ContentResolver contentResolver) {
+		return findDeletedMedia(contentResolver, MediaItem.CONTENT_URI);
+	}
+
+	public static ArrayList<String> findDeletedMediaLinks(ContentResolver contentResolver) {
+		return findDeletedMedia(contentResolver, MediaItem.CONTENT_URI_LINK);
+	}
+
+	private static ArrayList<String> findDeletedMedia(ContentResolver contentResolver, Uri contentUri) {
 		final ArrayList<String> mediaIds = new ArrayList<String>();
 		Cursor c = null;
 		try {
-			c = contentResolver.query(MediaItem.CONTENT_URI, MediaItem.PROJECTION_INTERNAL_ID, mDeletedSelection, null,
-					null);
+			c = contentResolver.query(contentUri, MediaItem.PROJECTION_INTERNAL_ID, mDeletedSelection, null, null);
 			if (c.getCount() > 0) {
 				final int columnIndex = c.getColumnIndexOrThrow(MediaItem.INTERNAL_ID);
 				while (c.moveToNext()) {

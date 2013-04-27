@@ -1171,16 +1171,16 @@ public class AudioActivity extends MediaPhoneActivity {
 				break;
 
 			case R.id.button_toggle_mode_audio:
-				final MediaItem spanningMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
-						mMediaItemInternalId);
-				if (spanningMediaItem != null && spanningMediaItem.getFile().length() > 0) {
-					boolean frameSpanning = toggleFrameSpanningMedia(spanningMediaItem);
-					updateSpanFramesButtonIcon(R.id.button_toggle_mode_audio, frameSpanning, true);
-					UIUtilities.showToast(AudioActivity.this, frameSpanning ? R.string.span_audio_multiple_frames
-							: R.string.span_audio_single_frame);
-				} else {
-					UIUtilities.showToast(AudioActivity.this, R.string.span_audio_add_content);
-				}
+				// final MediaItem spanningMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
+				// mMediaItemInternalId);
+				// if (spanningMediaItem != null && spanningMediaItem.getFile().length() > 0) {
+				// boolean frameSpanning = toggleFrameSpanningMedia(spanningMediaItem);
+				// updateSpanFramesButtonIcon(R.id.button_toggle_mode_audio, frameSpanning, true);
+				// UIUtilities.showToast(AudioActivity.this, frameSpanning ? R.string.span_audio_multiple_frames
+				// : R.string.span_audio_single_frame);
+				// } else {
+				// UIUtilities.showToast(AudioActivity.this, R.string.span_audio_add_content);
+				// }
 				break;
 
 			case R.id.button_delete_audio:
