@@ -1401,15 +1401,17 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 
 					// get the known links to this media item and check the frames contain other media; remove if not
 					iconsToUpdate = MediaManager.findLinkedParentIdsByMediaId(contentResolver, mediaId);
+					ArrayList<String> removedIcons = new ArrayList<String>();
 					for (final String frameId : iconsToUpdate) {
 						if (MediaManager.countMediaByParentId(contentResolver, frameId, false) <= 0) {
 							// don't allow frames that don't have any normal (i.e., non-linked media) - set deleted
-							iconsToUpdate.remove(frameId); // no need to update this icon any more - will not exist
 							FrameItem frameToDelete = FramesManager.findFrameByInternalId(contentResolver, frameId);
 							frameToDelete.setDeleted(true);
 							FramesManager.updateFrame(contentResolver, frameToDelete);
+							removedIcons.add(frameId); // no need to update this icon any more - will not exist
 						}
 					}
+					iconsToUpdate.removeAll(removedIcons);
 
 					// delete all links to this media item
 					MediaManager.deleteMediaLinks(contentResolver, mediaId);
@@ -1455,8 +1457,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			invalidateOptionsMenu();
 		}
 
-		// finally, toggle the spanning state of the media item and return the new state
-		// TODO: this could be why toggling sometimes fails - concurrent database access - check
+		// finally, return the new media spanning state
 		mediaItem.setSpanFrames(!isFrameSpanning);
 		MediaManager.updateMedia(getContentResolver(), mediaItem);
 		return !isFrameSpanning;

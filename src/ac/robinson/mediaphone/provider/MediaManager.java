@@ -118,8 +118,8 @@ public class MediaManager {
 		arguments1[0] = mediaId;
 		final ContentValues contentValues = new ContentValues();
 		contentValues.put(MediaItem.DELETED, 1);
-		int count = contentResolver.update(MediaItem.CONTENT_URI_LINK, contentValues, mMediaInternalIdSelection,
-				arguments1);
+		int count = contentResolver.update(MediaItem.CONTENT_URI_LINK, contentValues,
+				mMediaInternalIdNotDeletedSelection, arguments1);
 		return count;
 	}
 
@@ -163,7 +163,7 @@ public class MediaManager {
 		return count == 1;
 	}
 
-	// TODO: update links
+	@Deprecated
 	public static boolean changeMediaId(ContentResolver contentResolver, String oldMediaItemInternalId,
 			String newMediaItemInternalId) {
 		final String[] arguments1 = mArguments1;
