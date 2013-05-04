@@ -46,7 +46,7 @@ import android.widget.ProgressBar;
 
 public class FrameAdapter extends CursorAdapter implements FilterQueryProvider {
 
-	//TODO: switch to Loader like in NarrativeAdapter (and load these at query time)
+	// TODO: switch to Loader like in NarrativeAdapter (and load these at query time)
 	private final int mInternalIdIndex;
 	private final int mParentIdIndex;
 

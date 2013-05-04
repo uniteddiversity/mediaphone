@@ -33,6 +33,7 @@ public class MediaManager {
 	private static String[] mArguments2 = new String[2];
 
 	private static String mMediaInternalIdSelection;
+	private static String mMediaInternalIdNotDeletedSelection;
 	private static String mMediaInternalIdAndParentIdSelection;
 	private static String mMediaParentIdSelection;
 	private static String mDeletedSelection;
@@ -41,6 +42,15 @@ public class MediaManager {
 		selection.append(MediaItem.INTERNAL_ID);
 		selection.append("=?");
 		mMediaInternalIdSelection = selection.toString();
+
+		selection.setLength(0); // clears
+		selection.append("(");
+		selection.append(MediaItem.DELETED);
+		selection.append("=0 AND ");
+		selection.append(MediaItem.INTERNAL_ID);
+		selection.append("=?");
+		selection.append(")");
+		mMediaInternalIdNotDeletedSelection = selection.toString();
 
 		selection.setLength(0); // clears
 		selection.append("(");
@@ -57,7 +67,7 @@ public class MediaManager {
 		selection.append("=0 AND (");
 		selection.append(MediaItem.PARENT_ID);
 		selection.append("=?");
-		selection.append("))");
+		selection.append("))"); // extra ) is to contain OR for multiple parent selections
 		mMediaParentIdSelection = selection.toString();
 
 		selection.setLength(0);
@@ -224,7 +234,7 @@ public class MediaManager {
 		Cursor c = null;
 		try {
 			c = contentResolver.query(MediaItem.CONTENT_URI_LINK, MediaItem.PROJECTION_PARENT_ID,
-					mMediaInternalIdSelection, arguments1, null);
+					mMediaInternalIdNotDeletedSelection, arguments1, null);
 
 			if (c.getCount() > 0) {
 				final int columnIndex = c.getColumnIndexOrThrow(MediaItem.PARENT_ID);
