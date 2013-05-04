@@ -272,8 +272,14 @@ public class AudioActivity extends MediaPhoneActivity {
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		MenuInflater inflater = getMenuInflater();
-		setupMenuNavigationButtonsFromMedia(inflater, menu, getContentResolver(), mMediaItemInternalId, mHasEditedMedia);
+		createMediaMenuNavigationButtons(inflater, menu, mHasEditedMedia);
 		return super.onCreateOptionsMenu(menu);
+	}
+
+	@Override
+	public boolean onPrepareOptionsMenu(Menu menu) {
+		prepareMediaMenuNavigationButtons(menu, mMediaItemInternalId);
+		return super.onPrepareOptionsMenu(menu);
 	}
 
 	@Override
@@ -918,8 +924,7 @@ public class AudioActivity extends MediaPhoneActivity {
 					if (mDisplayMode == DisplayMode.RECORD_AUDIO && audioMediaItem.getFile().length() > 0) {
 						onBackPressed(); // need to exit from recording mode when not recording but no player present
 					}
-					return switchFrames(audioMediaItem.getParentId(), itemId, R.string.extra_internal_id,
-							showOptionsMenu, FrameEditorActivity.class);
+					return switchFrames(audioMediaItem.getParentId(), itemId, null, showOptionsMenu);
 				}
 			}
 		}

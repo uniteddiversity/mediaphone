@@ -119,17 +119,19 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				// change the frame that is displayed, if applicable
 				changeFrames(loadLastEditedFrame());
 
-				// do image loading here so that we know the layout's size for sizing the image
-				if (mReloadImagePath != null) {
-					reloadFrameImage(mReloadImagePath);
-					mReloadImagePath = null;
-				}
-
+				// never have to show the options menu after creating a new frame
 				if (mShowOptionsMenu) {
 					mShowOptionsMenu = false;
 					openOptionsMenu();
 				}
 			}
+
+			// do image loading here so that we know the layout's size for sizing the image
+			if (mReloadImagePath != null) {
+				reloadFrameImage(mReloadImagePath);
+				mReloadImagePath = null;
+			}
+
 			registerForSwipeEvents(); // here to avoid crashing due to double-swiping
 		}
 	}
@@ -187,19 +189,23 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				// otherwise we need to delete our media from subsequent frames; always update the next frame's icon
 				ArrayList<String> frameComponents = MediaManager.findMediaIdsByParentId(contentResolver,
 						mFrameInternalId, false);
-				expandLinkedMediaAndDeleteItem(nextFrameId, null, frameComponents);
+				inheritMediaAndDeleteItemLinks(nextFrameId, null, frameComponents);
 			}
 		}
 
 		setResult(Activity.RESULT_OK);
-		super.onBackPressed();
+		try {
+			// if they've managed to swipe and open another activity between, this will crash as result can't be sent
+			super.onBackPressed();
+		} catch (RuntimeException e) {
+		}
 	}
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		// TODO: if we couldn't open a temporary directory then exporting won't work
 		MenuInflater inflater = getMenuInflater();
-		setupMenuNavigationButtons(inflater, menu, mFrameInternalId, mHasEditedMedia, false);
+		setupFrameMenuNavigationButtons(inflater, menu, mFrameInternalId, mHasEditedMedia, false);
 		inflater.inflate(R.menu.play_narrative, menu);
 		inflater.inflate(R.menu.make_template, menu);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
@@ -214,7 +220,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		switch (itemId) {
 			case R.id.menu_previous_frame:
 			case R.id.menu_next_frame:
-				switchFrames(mFrameInternalId, itemId, R.string.extra_internal_id, true, FrameEditorActivity.class);
+				switchFrames(mFrameInternalId, itemId, null, true);
 				return true;
 
 			case R.id.menu_export_narrative:
@@ -504,14 +510,12 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 
 	@Override
 	protected boolean swipeNext() {
-		return switchFrames(mFrameInternalId, R.id.menu_next_frame, R.string.extra_internal_id, false,
-				FrameEditorActivity.class);
+		return switchFrames(mFrameInternalId, R.id.menu_next_frame, null, false);
 	}
 
 	@Override
 	protected boolean swipePrevious() {
-		return switchFrames(mFrameInternalId, R.id.menu_previous_frame, R.string.extra_internal_id, false,
-				FrameEditorActivity.class);
+		return switchFrames(mFrameInternalId, R.id.menu_previous_frame, null, false);
 	}
 
 	private int getAudioIndex(int buttonId) {
@@ -526,9 +530,9 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		return -1;
 	}
 
-	private void editImage() {
+	private void editImage(String parentId) {
 		final Intent takePictureIntent = new Intent(FrameEditorActivity.this, CameraActivity.class);
-		takePictureIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
+		takePictureIntent.putExtra(getString(R.string.extra_parent_id), parentId);
 		startActivityForResult(takePictureIntent, MediaPhone.R_id_intent_picture_editor);
 	}
 
@@ -548,9 +552,9 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		startActivityForResult(recordAudioIntent, MediaPhone.R_id_intent_audio_editor);
 	}
 
-	private void editText() {
+	private void editText(String parentId) {
 		final Intent addTextIntent = new Intent(FrameEditorActivity.this, TextActivity.class);
-		addTextIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
+		addTextIntent.putExtra(getString(R.string.extra_parent_id), parentId);
 		startActivityForResult(addTextIntent, MediaPhone.R_id_intent_text_editor);
 	}
 
@@ -574,20 +578,27 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 					builder.setNegativeButton(R.string.span_media_edit_original, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int which) {
-							editImage();
+							// find the parent frame of the media item we want to edit, switch to it, then edit
+							MediaItem inheritedImage = MediaManager.findMediaByInternalId(getContentResolver(),
+									mImageInherited);
+							if (inheritedImage != null) {
+								final String newFrameId = inheritedImage.getParentId();
+								switchFrames(mFrameInternalId, 0, newFrameId, false);
+								editImage(newFrameId);
+							}
 						}
 					});
 					builder.setPositiveButton(R.string.span_media_add_new, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int whichButton) {
 							endLinkedMediaItem(mImageInherited, mFrameInternalId); // remove the existing media link
-							editImage();
+							editImage(mFrameInternalId);
 						}
 					});
 					AlertDialog alert = builder.create();
 					alert.show();
 				} else {
-					editImage();
+					editImage(mFrameInternalId);
 				}
 				break;
 
@@ -629,20 +640,28 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 					builder.setNegativeButton(R.string.span_media_edit_original, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int which) {
-							editText();
+							// find the parent frame of the media item we want to edit, switch to it, then edit
+							MediaItem inheritedText = MediaManager.findMediaByInternalId(getContentResolver(),
+									mTextInherited);
+							if (inheritedText != null) {
+								final String newFrameId = inheritedText.getParentId();
+								switchFrames(mFrameInternalId, 0, newFrameId, false);
+								editText(newFrameId);
+							}
 						}
 					});
 					builder.setPositiveButton(R.string.span_media_add_new, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int whichButton) {
-							endLinkedMediaItem(mTextInherited, mFrameInternalId); // remove the existing media link
-							editText();
+							// remove the existing media links and edit a new text item
+							endLinkedMediaItem(mTextInherited, mFrameInternalId);
+							editText(mFrameInternalId);
 						}
 					});
 					AlertDialog alert = builder.create();
 					alert.show();
 				} else {
-					editText();
+					editText(mFrameInternalId);
 				}
 				break;
 

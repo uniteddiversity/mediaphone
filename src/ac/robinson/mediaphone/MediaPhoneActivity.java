@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import ac.robinson.mediaphone.activity.FrameEditorActivity;
 import ac.robinson.mediaphone.activity.NarrativeBrowserActivity;
 import ac.robinson.mediaphone.activity.PreferencesActivity;
 import ac.robinson.mediaphone.activity.SaveNarrativeActivity;
@@ -58,6 +59,7 @@ import ac.robinson.util.UIUtilities;
 import ac.robinson.util.ViewServer;
 import ac.robinson.view.CenteredImageTextButton;
 import ac.robinson.view.CrossFadeDrawable;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -421,31 +423,38 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		}
 	}
 
-	protected void setupMenuNavigationButtonsFromMedia(MenuInflater inflater, Menu menu,
-			ContentResolver contentResolver, String mediaId, boolean edited) {
-		String parentId = null;
-		boolean preventNextFrameNavigation = false;
+	protected void createMediaMenuNavigationButtons(MenuInflater inflater, Menu menu, boolean edited) {
+		inflater.inflate(R.menu.add_frame, menu);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+			if (edited) {
+				inflater.inflate(R.menu.finished_editing, menu);
+			} else {
+				inflater.inflate(R.menu.back_without_editing, menu);
+			}
+		}
+	}
+
+	protected void prepareMediaMenuNavigationButtons(Menu menu, String mediaId) {
+		boolean allowSpannedMediaNavigation = false;
 		if (mediaId != null) {
 			MediaItem mediaItem = MediaManager.findMediaByInternalId(getContentResolver(), mediaId);
 			if (mediaItem != null) {
-				parentId = mediaItem.getParentId();
-
-				// don't allow spanned frames to navigate to next as this doesn't make any sense
-				preventNextFrameNavigation = mediaItem.getSpanFrames();
+				// don't allow spanned frames to add frame after as this doesn't make any sense
+				allowSpannedMediaNavigation = !mediaItem.getSpanFrames();
 			}
 		}
-		setupMenuNavigationButtons(inflater, menu, parentId, edited, preventNextFrameNavigation);
+		menu.findItem(R.id.menu_add_frame).setEnabled(allowSpannedMediaNavigation);
 	}
 
-	protected void setupMenuNavigationButtons(MenuInflater inflater, Menu menu, String frameId, boolean edited,
-			boolean preventNextFrameNavigation) {
+	protected void setupFrameMenuNavigationButtons(MenuInflater inflater, Menu menu, String frameId, boolean edited,
+			boolean preventSpannedMediaNavigation) {
 		inflater.inflate(R.menu.previous_frame, menu);
 		inflater.inflate(R.menu.next_frame, menu);
 		// we should have already got focus by the time this is called, so can try to disable invalid buttons
 		if (frameId != null) {
 			NavigationMode navigationAllowed = FrameItem.getNavigationAllowed(getContentResolver(), frameId);
 			if (navigationAllowed == NavigationMode.PREVIOUS || navigationAllowed == NavigationMode.NONE
-					|| preventNextFrameNavigation) {
+					|| preventSpannedMediaNavigation) {
 				menu.findItem(R.id.menu_next_frame).setEnabled(false);
 			}
 			if (navigationAllowed == NavigationMode.NEXT || navigationAllowed == NavigationMode.NONE) {
@@ -453,6 +462,9 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			}
 		}
 		inflater.inflate(R.menu.add_frame, menu);
+		if (preventSpannedMediaNavigation) {
+			menu.findItem(R.id.menu_add_frame).setEnabled(false);
+		}
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
 			if (edited) {
 				inflater.inflate(R.menu.finished_editing, menu);
@@ -882,8 +894,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	 * @param targetActivityClass
 	 * @return
 	 */
-	protected boolean switchFrames(String currentFrameId, int buttonId, int idExtra, boolean showOptionsMenu,
-			Class<?> targetActivityClass) {
+	protected boolean switchFrames(String currentFrameId, int buttonId, String newFrameId, boolean showOptionsMenu) {
 		if (currentFrameId == null) {
 			return false;
 		}
@@ -896,6 +907,13 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		int inAnimation = R.anim.slide_in_from_right;
 		int outAnimation = R.anim.slide_out_to_left;
 		switch (buttonId) {
+			case 0:
+				newFramePosition = narrativeFrameIds.indexOf(newFrameId);
+				if (currentPosition < newFramePosition) {
+					inAnimation = R.anim.slide_in_from_left;
+					outAnimation = R.anim.slide_out_to_right;
+				}
+				break;
 			case R.id.menu_previous_frame:
 				if (currentPosition > 0) {
 					newFramePosition = currentPosition - 1;
@@ -910,8 +928,9 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				break;
 		}
 		if (newFramePosition >= 0) {
-			final Intent nextPreviousFrameIntent = new Intent(MediaPhoneActivity.this, targetActivityClass);
-			nextPreviousFrameIntent.putExtra(getString(idExtra), narrativeFrameIds.get(newFramePosition));
+			final Intent nextPreviousFrameIntent = new Intent(MediaPhoneActivity.this, FrameEditorActivity.class);
+			nextPreviousFrameIntent.putExtra(getString(R.string.extra_internal_id),
+					narrativeFrameIds.get(newFramePosition));
 
 			// this allows us to prevent showing first activity launch hints repeatedly
 			nextPreviousFrameIntent.putExtra(getString(R.string.extra_switched_frames), true);
@@ -1048,13 +1067,9 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			updateCurrentIcon = true;
 		}
 
-		// if this is not a spanning media item, nothing more needs to be done
-		if (!mediaItem.getSpanFrames()) {
-			return;
-		}
-
 		final String parentId = mediaItem.getParentId();
 		final String internalId = mediaItem.getInternalId();
+		final boolean updateMultipleIcons = mediaItem.getSpanFrames();
 		runQueuedBackgroundTask(new BackgroundRunnable() {
 			@Override
 			public int getTaskId() {
@@ -1073,8 +1088,10 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					FramesManager.reloadFrameIcon(getResources(), contentResolver, parentId);
 				}
 
-				// update all frame items that link to this media item
-				updateMultipleFrameIcons(MediaManager.findLinkedParentIdsByMediaId(contentResolver, internalId));
+				// if applicable, update all frame items that link to this media item
+				if (updateMultipleIcons) {
+					updateMultipleFrameIcons(MediaManager.findLinkedParentIdsByMediaId(contentResolver, internalId));
+				}
 			}
 		});
 	}
@@ -1158,12 +1175,12 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	 * always update startFrameId's icon. Used when deleting a media item or frame.
 	 * 
 	 * @param startFrameId
-	 * @param mediaItemToDelete a media item from startFrameId that will be deleted here, and so should also be checked
-	 *            in the following frames for spanning - used only from media activities (may be null)
+	 * @param deletedMediaItem a media item from startFrameId has already been deleted, and so should also be checked in
+	 *            the following frames for spanning - used only from media activities (may be null)
 	 * @param frameMediaItemsToDelete a list of media item ids that should be removed from startFrameId and all
 	 *            following frames - used only from frame editor (may be null)
 	 */
-	protected void expandLinkedMediaAndDeleteItem(final String startFrameId, final MediaItem mediaItemToDelete,
+	protected void inheritMediaAndDeleteItemLinks(final String startFrameId, final MediaItem deletedMediaItem,
 			final ArrayList<String> frameMediaItemsToDelete) {
 
 		// first get a list of the frames that could need updating
@@ -1177,9 +1194,9 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		// and a list of icons that we will need to update
 		// this also fixes an issue where database conflicts were occurring (random quits) in the task thread
 		final ArrayList<String> iconsToUpdate = new ArrayList<String>();
-		if (mediaItemToDelete != null) {
+		if (deletedMediaItem != null) {
 			iconsToUpdate.addAll(MediaManager.findLinkedParentIdsByMediaId(contentResolver,
-					mediaItemToDelete.getInternalId()));
+					deletedMediaItem.getInternalId()));
 		}
 		if (frameMediaItemsToDelete != null) {
 			for (String mediaId : frameMediaItemsToDelete) {
@@ -1198,36 +1215,42 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(frameId));
 		}
 
-		// save loading things twice if we can
-		final ArrayList<MediaItem> previousMedia;
+		// save loading things twice if we can - get the previous frame and its media
+		final String previousFrameId;
+		if (narrativeFrameIds.size() >= 1) {
+			previousFrameId = narrativeFrameIds.remove(0);
+		} else {
+			previousFrameId = null;
+		}
+
+		// get inherited media (items from the previous frame that span multiple frames)
+		final ArrayList<MediaItem> inheritedMedia = new ArrayList<MediaItem>();
+		if (previousFrameId != null) {
+			ArrayList<MediaItem> prevMedia = MediaManager.findMediaByParentId(contentResolver, previousFrameId);
+			// filter - we only need items that span frames
+			for (final MediaItem media : prevMedia) {
+				if (media.getSpanFrames()) {
+					inheritedMedia.add(media);
+				}
+			}
+		}
 
 		// because we delete and propagate all icons at once, the current frame's propagated media may not have been
 		// updated by the time we return, and may not show in the frame editor - to deal with this we propagate the
 		// current frame's media first, on the UI thread, but only for the type of deletedMediaItem (no others apply)
-		if (mediaItemToDelete != null && narrativeFrameIds.size() >= 1) { // >= 1 so we have at least the previous
-
-			// we end up deleting this twice; fine because we're only setting deleted (rather than actually removing)
-			mediaItemToDelete.setDeleted(true);
-			MediaManager.updateMedia(contentResolver, mediaItemToDelete);
-
-			// now link the previous frame's media of this type (if not currently linked)
-			String previousFrameId = narrativeFrameIds.get(0);
-			int mediaType = mediaItemToDelete.getType();
+		if (deletedMediaItem != null) {
+			// link the previous frame's media of this item's type (if not currently linked)
+			int mediaType = deletedMediaItem.getType();
 			if (previousFrameId != null) {
 				ArrayList<String> currentMedia = MediaManager.findLinkedMediaIdsByParentId(contentResolver,
 						startFrameId); // need to compare with existing links so we don't re-add audio when deleting one
-				previousMedia = MediaManager.findMediaByParentId(contentResolver, previousFrameId);
-				for (MediaItem media : previousMedia) {
+				for (MediaItem media : inheritedMedia) {
 					final String mediaId = media.getInternalId();
-					if (media.getSpanFrames() && media.getType() == mediaType && !currentMedia.contains(mediaId)) {
+					if (media.getType() == mediaType && !currentMedia.contains(mediaId)) {
 						MediaManager.addMediaLink(contentResolver, startFrameId, mediaId);
 					}
 				}
-			} else {
-				previousMedia = null;
 			}
-		} else {
-			previousMedia = null;
 		}
 
 		// because database access can take time, we need to do db and icon updates in the same thread
@@ -1245,8 +1268,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			@Override
 			public void run() {
 
-				// first, delete the media items as requested - we've actually already deleted mediaItemToDelete, but
-				// need to make sure that it's deleted in this thread, so updates are in sync (deleting twice is fine)
+				// first, delete the media items as requested
 				ContentResolver contentResolver = getContentResolver();
 				if (frameMediaItemsToDelete != null) {
 					for (String mediaId : frameMediaItemsToDelete) {
@@ -1257,60 +1279,23 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 						}
 					}
 				}
-				if (mediaItemToDelete != null) {
-					mediaItemToDelete.setDeleted(true);
-					MediaManager.updateMedia(contentResolver, mediaItemToDelete);
+
+				// if we're removing a frame's media, we need to add the current frame to propagate media to (in this
+				// case, startFrameId is the frame after the deleted frame, rather than the frame media is removed from)
+				if (frameMediaItemsToDelete != null) {
+					narrativeFrameIds.add(0, startFrameId);
 				}
 
 				// check we have enough frames to operate on
-				switch (narrativeFrameIds.size()) {
-					case 0:
-						return; // nothing to do - no frames found, so we won't be able to update the icon
-					case 1:
-						FramesManager.reloadFrameIcon(getResources(), contentResolver, startFrameId);
-						return; // nothing do do - we only have the previous frame, and have already propagated/deleted
-				}
-
-				// check media in the previous frame to expand if necessary - because of links need only check one frame
-				String previousFrameId = narrativeFrameIds.remove(0);
-				ArrayList<MediaItem> prevMedia = new ArrayList<MediaItem>();
-				if (previousFrameId != null) {
-					// can't propagate without a frame to inherit from - just delete links and update icons instead
-					// first find any spanning media from the previous frame; reuse previous query if possible (note: we
-					// can't use a linked media query here because media spanning from its original frame is not a link)
-					ArrayList<MediaItem> tempMedia;
-					if (previousMedia != null) {
-						tempMedia = previousMedia;
-					} else {
-						tempMedia = MediaManager.findMediaByParentId(contentResolver, previousFrameId);
-					}
-
-					// filter - we only need items that span frames
-					for (final MediaItem media : tempMedia) {
-						if (media.getSpanFrames()) {
-							prevMedia.add(media);
-						}
-					}
-				}
-
-				// check that we still have media or icons to update
-				if (prevMedia.size() == 0 && iconsToUpdate.size() == 0) {
+				if (narrativeFrameIds.size() == 0 || (inheritedMedia.size() == 0 && iconsToUpdate.size() == 0)) {
 					// no spanning items or media to delete; nothing to do except update the current frame's icon
 					FramesManager.reloadFrameIcon(getResources(), contentResolver, startFrameId);
 					return;
 				}
 
-				// must always update the current icon (first for better appearance)
-				iconsToUpdate.add(0, startFrameId);
-
-				// if we're removing a frame's media, we need to add the current frame to propagate media - in this
-				// case, startFrameId is the frame after the deleted frame, rather than the frame media is removed from
-				if (frameMediaItemsToDelete != null) {
-					narrativeFrameIds.add(0, startFrameId);
-				}
-
 				// now remove previously propagated media and propagate media from earlier frames
 				boolean deletedMediaComplete = false;
+				iconsToUpdate.add(0, startFrameId); // always update the current icon (first for better appearance)
 				for (final String frameId : narrativeFrameIds) {
 
 					// update icons to remove this media item from its propagated frames
@@ -1332,16 +1317,16 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					}
 
 					// need to check all following frames until we find those with media of this type
-					if (prevMedia.size() > 0) {
+					if (inheritedMedia.size() > 0) {
 						// check this frame's media for collisions with spanning items
 						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId,
 								false);
 						ArrayList<MediaItem> mediaToRemove = new ArrayList<MediaItem>();
-						for (final MediaItem inheritedMedia : prevMedia) {
-							int currentType = inheritedMedia.getType();
+						for (final MediaItem newMedia : inheritedMedia) {
+							int currentType = newMedia.getType();
 							for (MediaItem existingMedia : frameMedia) {
 								if (existingMedia.getType() == currentType) {
-									mediaToRemove.add(inheritedMedia); // this media overrides spanning - finished item
+									mediaToRemove.add(newMedia); // this media overrides spanning - finished item
 									// break; //TODO: should we do audio differently? currently one overrides all
 								}
 							}
@@ -1349,8 +1334,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 						frameMedia.removeAll(mediaToRemove);
 
 						// any media still in the propagated list should be added to this frame
-						if (prevMedia.size() > 0) {
-							for (MediaItem propagatedMedia : prevMedia) {
+						if (inheritedMedia.size() > 0) {
+							for (MediaItem propagatedMedia : inheritedMedia) {
 								MediaManager.addMediaLink(contentResolver, frameId, propagatedMedia.getInternalId());
 							}
 							if (!iconsToUpdate.contains(frameId)) { // only add items we haven't already queued
@@ -1364,8 +1349,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// remove all links to the deleted media items
-				if (mediaItemToDelete != null) {
-					MediaManager.deleteMediaLinks(contentResolver, mediaItemToDelete.getInternalId());
+				if (deletedMediaItem != null) {
+					MediaManager.deleteMediaLinks(contentResolver, deletedMediaItem.getInternalId());
 				}
 				if (frameMediaItemsToDelete != null) {
 					for (String mediaLink : frameMediaItemsToDelete) {
@@ -1385,6 +1370,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	 * @param mediaItem
 	 * @return The new state of the media item (true for frame spanning; false otherwise)
 	 */
+	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	protected boolean toggleFrameSpanningMedia(MediaItem mediaItem) {
 
 		final boolean isFrameSpanning = mediaItem.getSpanFrames();
@@ -1463,6 +1449,11 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				updateMultipleFrameIcons(iconsToUpdate);
 			}
 		});
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+			// state has changed, so disabled menu items may be enabled, and vice-versa
+			invalidateOptionsMenu();
+		}
 
 		// finally, toggle the spanning state of the media item and return the new state
 		// TODO: this could be why toggling sometimes fails - concurrent database access - check

@@ -55,8 +55,6 @@ public class TextActivity extends MediaPhoneActivity {
 
 	private String mMediaItemInternalId = null;
 	private boolean mHasEditedMedia = false;
-	private boolean mShowOptionsMenu = false;
-	private boolean mSwitchedFrames = false;
 
 	private EditText mEditText;
 
@@ -71,14 +69,11 @@ public class TextActivity extends MediaPhoneActivity {
 
 		mEditText = (EditText) findViewById(R.id.text_view);
 		mMediaItemInternalId = null;
-		mShowOptionsMenu = false;
-		mSwitchedFrames = false;
 
 		// load previous state on screen rotation
 		if (savedInstanceState != null) {
 			mMediaItemInternalId = savedInstanceState.getString(getString(R.string.extra_internal_id));
 			mHasEditedMedia = savedInstanceState.getBoolean(getString(R.string.extra_media_edited));
-			mSwitchedFrames = savedInstanceState.getBoolean(getString(R.string.extra_switched_frames));
 			if (mHasEditedMedia) {
 				setBackButtonIcons(TextActivity.this, R.id.button_finished_text, 0, true);
 			}
@@ -92,26 +87,13 @@ public class TextActivity extends MediaPhoneActivity {
 	public void onSaveInstanceState(Bundle savedInstanceState) {
 		savedInstanceState.putString(getString(R.string.extra_internal_id), mMediaItemInternalId);
 		savedInstanceState.putBoolean(getString(R.string.extra_media_edited), mHasEditedMedia);
-		savedInstanceState.putBoolean(getString(R.string.extra_switched_frames), mSwitchedFrames);
 		super.onSaveInstanceState(savedInstanceState);
-	}
-
-	@Override
-	public void onWindowFocusChanged(boolean hasFocus) {
-		super.onWindowFocusChanged(hasFocus);
-		if (hasFocus) {
-			if (mShowOptionsMenu) {
-				mShowOptionsMenu = false;
-				openOptionsMenu();
-			}
-			registerForSwipeEvents(); // here to avoid crashing due to double-swiping
-		}
 	}
 
 	@Override
 	protected void onResume() {
 		super.onResume();
-		// we want to get notifications when the text is changed (but after adding existing text)
+		// we want to get notifications when the text is changed (but after adding existing text in onCreate)
 		mEditText.addTextChangedListener(mTextWatcher);
 	}
 
@@ -163,7 +145,7 @@ public class TextActivity extends MediaPhoneActivity {
 							try {
 								fileOutputStream = new FileOutputStream(textMediaItem.getFile());
 								fileOutputStream.write(mediaText.toString().getBytes());
-								fileOutputStream.flush(); // does nothing in FileOutputStream
+								// fileOutputStream.flush(); // does nothing in FileOutputStream
 							} catch (Throwable t) {
 								// no need to update the icon - nothing has changed
 							} finally {
@@ -176,8 +158,12 @@ public class TextActivity extends MediaPhoneActivity {
 					updateMediaFrameIcons(textMediaItem, textUpdateRunnable);
 				}
 			} else {
+				// delete the media item
+				textMediaItem.setDeleted(true);
+				MediaManager.updateMedia(getContentResolver(), textMediaItem);
+
 				// we've been deleted - propagate changes to our parent frame and any following frames
-				expandLinkedMediaAndDeleteItem(textMediaItem.getParentId(), textMediaItem, null);
+				inheritMediaAndDeleteItemLinks(textMediaItem.getParentId(), textMediaItem, null);
 			}
 
 			// save the id of the frame we're part of so that the frame editor gets notified
@@ -208,19 +194,19 @@ public class TextActivity extends MediaPhoneActivity {
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		MenuInflater inflater = getMenuInflater();
-		setupMenuNavigationButtonsFromMedia(inflater, menu, getContentResolver(), mMediaItemInternalId, mHasEditedMedia);
+		createMediaMenuNavigationButtons(inflater, menu, mHasEditedMedia);
 		return super.onCreateOptionsMenu(menu);
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
-		final int itemId = item.getItemId();
-		switch (itemId) {
-			case R.id.menu_previous_frame:
-			case R.id.menu_next_frame:
-				performSwitchFrames(itemId, true);
-				return true;
+	public boolean onPrepareOptionsMenu(Menu menu) {
+		prepareMediaMenuNavigationButtons(menu, mMediaItemInternalId);
+		return super.onPrepareOptionsMenu(menu);
+	}
 
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		switch (item.getItemId()) {
 			case R.id.menu_add_frame:
 				final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
@@ -274,8 +260,6 @@ public class TextActivity extends MediaPhoneActivity {
 			final Intent intent = getIntent();
 			if (intent != null) {
 				parentInternalId = intent.getStringExtra(getString(R.string.extra_parent_id));
-				mShowOptionsMenu = intent.getBooleanExtra(getString(R.string.extra_show_options_menu), false);
-				mSwitchedFrames = intent.getBooleanExtra(getString(R.string.extra_switched_frames), false);
 			}
 			if (parentInternalId == null) {
 				UIUtilities.showToast(TextActivity.this, R.string.error_loading_text_editor);
@@ -284,7 +268,7 @@ public class TextActivity extends MediaPhoneActivity {
 				return;
 			}
 
-			// get existing content if it exists
+			// get existing content if it exists (ignores links)
 			mMediaItemInternalId = FrameItem.getTextContentId(contentResolver, parentInternalId);
 
 			// add a new media item if it doesn't already exist
@@ -320,28 +304,6 @@ public class TextActivity extends MediaPhoneActivity {
 			onBackPressed();
 			return;
 		}
-	}
-
-	private boolean performSwitchFrames(int itemId, boolean showOptionsMenu) {
-		if (mMediaItemInternalId != null) {
-			final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
-					mMediaItemInternalId);
-			if (textMediaItem != null) {
-				return switchFrames(textMediaItem.getParentId(), itemId, R.string.extra_parent_id, showOptionsMenu,
-						TextActivity.class);
-			}
-		}
-		return false;
-	}
-
-	@Override
-	protected boolean swipeNext() {
-		return performSwitchFrames(R.id.menu_next_frame, false);
-	}
-
-	@Override
-	protected boolean swipePrevious() {
-		return performSwitchFrames(R.id.menu_previous_frame, false);
 	}
 
 	public void handleButtonClicks(View currentButton) {
@@ -386,8 +348,7 @@ public class TextActivity extends MediaPhoneActivity {
 						onBackPressed();
 					}
 				});
-				final AlertDialog alert = builder.create();
-				alert.show();
+				builder.show();
 				break;
 		}
 	}
