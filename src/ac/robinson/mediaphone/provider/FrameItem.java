@@ -36,10 +36,10 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Paint.Align;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
-import android.graphics.Paint.Align;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.BaseColumns;
@@ -145,14 +145,15 @@ public class FrameItem implements BaseColumns {
 	}
 
 	/**
-	 * Get existing text content if it exists
+	 * Get existing text content if it exists. Note: does <b>not</b> include links.
 	 * 
 	 * @param contentResolver
 	 * @param parentInternalId The internal ID of the frame to search within
 	 * @return The internal ID of the text content, or null if none exists
 	 */
 	public static String getTextContentId(ContentResolver contentResolver, String parentInternalId) {
-		ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, parentInternalId);
+		ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, parentInternalId,
+				false);
 		for (MediaItem media : frameComponents) {
 			if (media.getType() == MediaPhoneProvider.TYPE_TEXT) {
 				return media.getInternalId();
@@ -162,14 +163,15 @@ public class FrameItem implements BaseColumns {
 	}
 
 	/**
-	 * Get existing image content if it exists
+	 * Get existing image content if it exists. Note: does <b>not</b> include links.
 	 * 
 	 * @param contentResolver
 	 * @param parentInternalId The internal ID of the frame to search within
 	 * @return The internal ID of the image content, or null if none exists
 	 */
 	public static String getImageContentId(ContentResolver contentResolver, String parentInternalId) {
-		ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, parentInternalId);
+		ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, parentInternalId,
+				false);
 		for (MediaItem media : frameComponents) {
 			switch (media.getType()) {
 				case MediaPhoneProvider.TYPE_IMAGE_BACK:
