@@ -66,6 +66,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	private String mFrameInternalId;
 	private boolean mHasEditedMedia = false;
 	private boolean mShowOptionsMenu = false;
+	private boolean mAddNewFrame = false;
 	private String mReloadImagePath = null;
 	private boolean mDeleteFrameOnExit = false;
 
@@ -110,18 +111,24 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	public void onWindowFocusChanged(boolean hasFocus) {
 		super.onWindowFocusChanged(hasFocus);
 		if (hasFocus) {
-			// change the frame that is displayed, if applicable
-			changeFrames(loadLastEditedFrame());
+			if (mAddNewFrame) {
+				mAddNewFrame = false;
+				addNewFrame();
+				loadFrameElements();
+			} else {
+				// change the frame that is displayed, if applicable
+				changeFrames(loadLastEditedFrame());
 
-			// do image loading here so that we know the layout's size for sizing the image
-			if (mReloadImagePath != null) {
-				reloadFrameImage(mReloadImagePath);
-				mReloadImagePath = null;
-			}
+				// do image loading here so that we know the layout's size for sizing the image
+				if (mReloadImagePath != null) {
+					reloadFrameImage(mReloadImagePath);
+					mReloadImagePath = null;
+				}
 
-			if (mShowOptionsMenu) {
-				mShowOptionsMenu = false;
-				openOptionsMenu();
+				if (mShowOptionsMenu) {
+					mShowOptionsMenu = false;
+					openOptionsMenu();
+				}
 			}
 			registerForSwipeEvents(); // here to avoid crashing due to double-swiping
 		}
@@ -142,7 +149,8 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		final FrameItem editedFrame = FramesManager.findFrameByInternalId(contentResolver, mFrameInternalId);
 		String newStartFrameId = null;
 		String nextFrameId = null;
-		if (MediaManager.countMediaByParentId(contentResolver, mFrameInternalId, false) <= 0 || mDeleteFrameOnExit) {
+		if (editedFrame != null
+				&& (MediaManager.countMediaByParentId(contentResolver, mFrameInternalId, false) <= 0 || mDeleteFrameOnExit)) {
 			// need the next frame id for scrolling (but before we update it to be deleted)
 			ArrayList<String> frameIds = FramesManager.findFrameIdsByParentId(contentResolver,
 					editedFrame.getParentId());
@@ -296,7 +304,8 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 
 			// adding a new frame
 			if (mFrameInternalId == null) {
-				addNewFrame();
+				mAddNewFrame = true;
+				return; // we'll add the new frame and load elements in onWindowFocusChanged for a better UI experience
 			}
 		}
 
@@ -368,6 +377,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		final Intent intent = getIntent();
 		if (intent == null) {
 			UIUtilities.showToast(FrameEditorActivity.this, R.string.error_loading_frame_editor);
+			mFrameInternalId = "-1"; // so we exit
 			onBackPressed();
 			return;
 		}
