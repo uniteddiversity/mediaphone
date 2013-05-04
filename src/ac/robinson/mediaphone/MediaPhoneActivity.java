@@ -2047,7 +2047,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					try {
 						r.run();
 					} catch (Throwable t) {
-						Log.d(DebugUtilities.getLogTag(this),
+						Log.e(DebugUtilities.getLogTag(this),
 								"Error running background task: " + t.getLocalizedMessage());
 					}
 					publishProgress(new int[] { r.getTaskId(), r.getShowDialog() ? 1 : 0, 1 });
@@ -2106,7 +2106,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				try {
 					backgroundTask.run();
 				} catch (Throwable t) {
-					Log.d(DebugUtilities.getLogTag(this), "Error running background task: " + t.getLocalizedMessage());
+					Log.e(DebugUtilities.getLogTag(this), "Error running background task: " + t.getLocalizedMessage());
 				}
 			}
 			return null;
@@ -2150,7 +2150,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					try {
 						r.run();
 					} catch (Throwable t) {
-						Log.d(DebugUtilities.getLogTag(this),
+						Log.e(DebugUtilities.getLogTag(this),
 								"Error running background task: " + t.getLocalizedMessage());
 					}
 					publishProgress(new int[] { r.getTaskId(), r.getShowDialog() ? 1 : 0, 1 });

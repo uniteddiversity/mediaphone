@@ -199,6 +199,9 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 					if (imageMediaItem.getDeleted()) {
 						// we've been deleted - propagate changes to our parent frame and any following frames
 						inheritMediaAndDeleteItemLinks(imageMediaItem.getParentId(), imageMediaItem, null);
+					} else if (mHasEditedMedia) {
+						// rotated or otherwise edited the image - update icons
+						updateMediaFrameIcons(imageMediaItem, null);
 					}
 					break;
 
@@ -907,6 +910,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 				break;
 			case R.id.image_rotate_completed:
 				mStopImageRotationAnimation = true;
+				mHasEditedMedia = true; // to force an icon update
 				setBackButtonIcons(CameraActivity.this, R.id.button_finished_picture, 0, true); // changed the image
 				MediaItem imageMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
