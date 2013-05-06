@@ -52,6 +52,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -536,10 +537,12 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		startActivityForResult(takePictureIntent, MediaPhone.R_id_intent_picture_editor);
 	}
 
-	private void editAudio(int selectedAudioIndex, boolean loadExisting) {
+	private void editAudio(String parentId, int selectedAudioIndex) {
 		final Intent recordAudioIntent = new Intent(FrameEditorActivity.this, AudioActivity.class);
-		recordAudioIntent.putExtra(getString(R.string.extra_parent_id), mFrameInternalId);
-		if (loadExisting) {
+		recordAudioIntent.putExtra(getString(R.string.extra_parent_id), parentId);
+
+		// index of -1 means don't edit existing
+		if (selectedAudioIndex >= 0) {
 			int currentIndex = 0;
 			for (String audioMediaId : mFrameAudioItems.keySet()) {
 				if (currentIndex == selectedAudioIndex) {
@@ -549,6 +552,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				currentIndex += 1;
 			}
 		}
+
 		startActivityForResult(recordAudioIntent, MediaPhone.R_id_intent_audio_editor);
 	}
 
@@ -614,20 +618,27 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 					builder.setNegativeButton(R.string.span_media_edit_original, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int which) {
-							editAudio(selectedAudioIndex, true);
+							// find the parent frame of the media item we want to edit, switch to it, then edit
+							MediaItem inheritedAudio = MediaManager.findMediaByInternalId(getContentResolver(),
+									mAudioInherited[selectedAudioIndex]);
+							if (inheritedAudio != null) {
+								final String newFrameId = inheritedAudio.getParentId();
+								switchFrames(mFrameInternalId, 0, newFrameId, false);
+								editAudio(mFrameInternalId, selectedAudioIndex);
+							}
 						}
 					});
 					builder.setPositiveButton(R.string.span_media_add_new, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int whichButton) {
 							endLinkedMediaItem(mAudioInherited[selectedAudioIndex], mFrameInternalId); // remove link
-							editAudio(selectedAudioIndex, false);
+							editAudio(mFrameInternalId, -1);
 						}
 					});
 					AlertDialog alert = builder.create();
 					alert.show();
 				} else {
-					editAudio(selectedAudioIndex, true);
+					editAudio(mFrameInternalId, selectedAudioIndex);
 				}
 				break;
 
@@ -701,13 +712,8 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 						setBackButtonIcons(FrameEditorActivity.this, R.id.button_finished_editing, 0, true);
 					}
 
-				} else if (resultCode == R.id.result_audio_ok_exit) {
-					// no point reloading if we're going to exit
-					// done this way (rather than reloading in this activity) so we get switching right/left animations
-					onBackPressed();
-				} else if (resultCode == R.id.result_audio_cancelled_exit) {
-					onBackPressed();
 				} else if (resultCode == R.id.result_narrative_deleted_exit) {
+					// no point reloading if we're going to exit
 					onBackPressed();
 				}
 				break;

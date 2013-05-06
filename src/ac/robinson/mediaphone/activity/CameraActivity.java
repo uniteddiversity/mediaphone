@@ -200,18 +200,22 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 						// we've been deleted - propagate changes to our parent frame and any following frames
 						inheritMediaAndDeleteItemLinks(imageMediaItem.getParentId(), imageMediaItem, null);
 					} else if (mHasEditedMedia) {
-						// rotated or otherwise edited the image - update icons
+						// imported, rotated or otherwise edited the image - update icons
 						updateMediaFrameIcons(imageMediaItem, null);
 					}
 					break;
 
 				case TAKE_PICTURE:
+					// display if they took a picture, exit otherwise
 					if (imageMediaItem.getFile().length() > 0) {
 						// took a new picture (rather than just cancelling the camera) - update the icon
 						if (mHasEditedMedia) {
 							// update this frame's icon with the new image; propagate to following frames if applicable
 							updateMediaFrameIcons(imageMediaItem, null);
 							setBackButtonIcons(CameraActivity.this, R.id.button_finished_picture, 0, true);
+
+							// if we do this then we can't tell whether to change icons on screen rotation; disabled
+							// mHasEditedMedia = false; // we've saved the icon, so are no longer in edit mode
 						}
 
 						switchToPicture(true); // will change the display mode to DISPLAY_PICTURE
@@ -276,9 +280,9 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 						mMediaItemInternalId);
 				if (imageMediaItem != null && imageMediaItem.getFile().length() > 0) {
 					final String newFrameId = insertFrameAfterMedia(imageMediaItem);
-					final Intent addTextIntent = new Intent(CameraActivity.this, CameraActivity.class);
-					addTextIntent.putExtra(getString(R.string.extra_parent_id), newFrameId);
-					startActivity(addTextIntent);
+					final Intent addImageIntent = new Intent(CameraActivity.this, CameraActivity.class);
+					addImageIntent.putExtra(getString(R.string.extra_parent_id), newFrameId);
+					startActivity(addImageIntent);
 
 					onBackPressed();
 				} else {
