@@ -323,7 +323,7 @@ public class TextActivity extends MediaPhoneActivity {
 				final MediaItem textMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
 				if (textMediaItem != null && !TextUtils.isEmpty(mEditText.getText())) {
-					mHasEditedMedia = true; // so we keep the same icon on rotation (TODO: causes extra icon updates)
+					mHasEditedMedia = true; // so we update/inherit on exit and show the media edited icon
 					setBackButtonIcons(TextActivity.this, R.id.button_finished_text, 0, true);
 					boolean frameSpanning = toggleFrameSpanningMedia(textMediaItem);
 					updateSpanFramesButtonIcon(R.id.button_toggle_mode_text, frameSpanning, true);

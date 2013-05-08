@@ -1049,6 +1049,9 @@ public class AudioActivity extends MediaPhoneActivity {
 				final MediaItem spanningAudioMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
 				if (spanningAudioMediaItem != null && spanningAudioMediaItem.getFile().length() > 0) {
+					mHasEditedMedia = true; // so we update/inherit on exit and show the media edited icon
+					setBackButtonIcons(AudioActivity.this, R.id.button_finished_audio, R.id.button_cancel_recording,
+							true);
 					boolean frameSpanning = toggleFrameSpanningMedia(spanningAudioMediaItem);
 					updateSpanFramesButtonIcon(R.id.button_toggle_mode_audio, frameSpanning, true);
 					UIUtilities.showToast(AudioActivity.this, frameSpanning ? R.string.span_audio_multiple_frames

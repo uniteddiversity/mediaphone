@@ -1320,14 +1320,28 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					if (inheritedMedia.size() > 0) {
 						// check this frame's media for collisions with spanning items
 						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId,
-								false);
+								true); // need inherited media for audio comparison
 						ArrayList<MediaItem> mediaToRemove = new ArrayList<MediaItem>();
+						int audioCount = 0;
+						for (MediaItem existingMedia : frameMedia) {
+							if (existingMedia.getType() == MediaPhoneProvider.TYPE_AUDIO) {
+								audioCount += 1;
+							}
+						}
 						for (final MediaItem newMedia : inheritedMedia) {
 							int currentType = newMedia.getType();
-							for (MediaItem existingMedia : frameMedia) {
-								if (existingMedia.getType() == currentType) {
-									mediaToRemove.add(newMedia); // this media overrides spanning - finished item
-									// break; //TODO: should we do audio differently? currently one overrides all
+							if (currentType == MediaPhoneProvider.TYPE_AUDIO) {
+								// TODO: should we have a priority here? (longest running items are most important?)
+								if (audioCount < MediaPhone.MAX_AUDIO_ITEMS) {
+									audioCount += 1; // audio doesn't override unless we're over the max item limit
+								} else {
+									mediaToRemove.add(newMedia); // over max audio items stops spanning - finished item
+								}
+							} else {
+								for (MediaItem existingMedia : frameMedia) {
+									if (existingMedia.getType() == currentType) {
+										mediaToRemove.add(newMedia); // any other media overrides spanning - item done
+									}
 								}
 							}
 						}
@@ -1428,12 +1442,25 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					for (String frameId : narrativeFrameIds) {
 						// need to add this media to all following frames until one that already has media of this type
 						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId,
-								false); // (no linked media needed)
+								true); // need inherited media for audio comparison
 						boolean mediaFound = false;
-						for (MediaItem media : frameMedia) {
-							if (media.getType() == mediaType) {
-								mediaFound = true; // TODO: should we do audio differently? currently one overrides all
-								break;
+						if (mediaType == MediaPhoneProvider.TYPE_AUDIO) {
+							int audioCount = 0;
+							for (MediaItem existingMedia : frameMedia) {
+								if (existingMedia.getType() == MediaPhoneProvider.TYPE_AUDIO) {
+									audioCount += 1;
+								}
+							}
+							// TODO: should we have a priority here? (longest running items are most important?)
+							if (audioCount >= MediaPhone.MAX_AUDIO_ITEMS) {
+								mediaFound = true; // over max audio items stops spanning - finished item
+							}
+						} else {
+							for (MediaItem media : frameMedia) {
+								if (media.getType() == mediaType) {
+									mediaFound = true; // any other media overrides spanning - item done
+									break;
+								}
 							}
 						}
 						if (!mediaFound) {

@@ -1008,7 +1008,8 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 				final MediaItem imageMediaItem = MediaManager.findMediaByInternalId(getContentResolver(),
 						mMediaItemInternalId);
 				if (imageMediaItem != null && imageMediaItem.getFile().length() > 0) {
-					mHasEditedMedia = true; // so we keep the same icon on rotation (TODO: potential extra icon updates)
+					mHasEditedMedia = true; // so we update/inherit on exit and show the media edited icon
+					setBackButtonIcons(CameraActivity.this, R.id.button_finished_picture, 0, true);
 					boolean frameSpanning = toggleFrameSpanningMedia(imageMediaItem);
 					updateSpanFramesButtonIcon(R.id.button_toggle_mode_picture, frameSpanning, true);
 					UIUtilities.showToast(CameraActivity.this, frameSpanning ? R.string.span_image_multiple_frames
