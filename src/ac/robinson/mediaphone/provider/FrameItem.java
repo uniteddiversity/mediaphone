@@ -22,7 +22,6 @@ package ac.robinson.mediaphone.provider;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Iterator;
 
 import ac.robinson.mediaphone.MediaPhone;
 import ac.robinson.mediaphone.R;
@@ -222,9 +221,7 @@ public class FrameItem implements BaseColumns {
 		int iconHeight = res.getDimensionPixelSize(R.dimen.frame_icon_height);
 
 		// load the image icon and prepare the other media items
-		Iterator<MediaItem> iterator = frameComponents.iterator();
-		while (iterator.hasNext()) {
-			MediaItem currentItem = iterator.next();
+		for (MediaItem currentItem : frameComponents) {
 			int currentType = currentItem.getType();
 
 			if (!imageLoaded

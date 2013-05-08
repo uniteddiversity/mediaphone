@@ -52,7 +52,6 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -60,9 +59,6 @@ import android.view.MenuItem;
 import android.view.View;
 
 public class FrameEditorActivity extends MediaPhoneActivity {
-
-	// not in MediaPhone.java because it needs more than just this to add more audio items (layouts need updating too)
-	private final int MAX_AUDIO_ITEMS = 3;
 
 	private String mFrameInternalId;
 	private boolean mHasEditedMedia = false;
@@ -75,7 +71,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 
 	// the ids of inherited (spanned) media items from previous frames
 	private String mImageInherited;
-	private String[] mAudioInherited = new String[MAX_AUDIO_ITEMS];
+	private String[] mAudioInherited = new String[MediaPhone.MAX_AUDIO_ITEMS];
 	private String mTextInherited;
 
 	@Override
@@ -327,7 +323,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text, 0, 0);
 
 		mImageInherited = null;
-		for (int i = 0; i < MAX_AUDIO_ITEMS; i++) {
+		for (int i = 0; i < MediaPhone.MAX_AUDIO_ITEMS; i++) {
 			mAudioInherited[i] = null;
 		}
 		mTextInherited = null;
@@ -356,7 +352,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				mFrameAudioItems.put(currentItem.getInternalId(), currentItem.getDurationMilliseconds());
 				mAudioInherited[mFrameAudioItems.size() - 1] = (currentItem.getSpanFrames() && !currentItem
 						.getParentId().equals(mFrameInternalId)) ? currentItem.getInternalId() : null;
-				if (mFrameAudioItems.size() >= MAX_AUDIO_ITEMS) {
+				if (mFrameAudioItems.size() >= MediaPhone.MAX_AUDIO_ITEMS) {
 					audioLoaded = true;
 				}
 
@@ -587,7 +583,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 									mImageInherited);
 							if (inheritedImage != null) {
 								final String newFrameId = inheritedImage.getParentId();
-								switchFrames(mFrameInternalId, 0, newFrameId, false);
+								saveLastEditedFrame(newFrameId);
 								editImage(newFrameId);
 							}
 						}
@@ -623,7 +619,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 									mAudioInherited[selectedAudioIndex]);
 							if (inheritedAudio != null) {
 								final String newFrameId = inheritedAudio.getParentId();
-								switchFrames(mFrameInternalId, 0, newFrameId, false);
+								saveLastEditedFrame(newFrameId);
 								editAudio(mFrameInternalId, selectedAudioIndex);
 							}
 						}
@@ -656,7 +652,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 									mTextInherited);
 							if (inheritedText != null) {
 								final String newFrameId = inheritedText.getParentId();
-								switchFrames(mFrameInternalId, 0, newFrameId, false);
+								saveLastEditedFrame(newFrameId);
 								editText(newFrameId);
 							}
 						}
