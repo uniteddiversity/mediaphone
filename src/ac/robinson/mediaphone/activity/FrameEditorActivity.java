@@ -72,8 +72,9 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 	// the ids of inherited (spanned) media items from previous frames
 	private String mImageInherited;
 	private int mImageLinkingDrawable;
-	private String[] mAudioInherited = new String[MediaPhone.MAX_AUDIO_ITEMS];
-	private int[] mAudioLinkingDrawables = new int[MediaPhone.MAX_AUDIO_ITEMS];
+	private String mAudioInherited;
+	private int mAudioLinkingIndex; // we only allow one inherited audio item, but need to know which one it is
+	private int mAudioLinkingDrawable;
 	private String mTextInherited;
 
 	@Override
@@ -323,12 +324,12 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		textButton.setText("");
 		textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text, 0, 0);
 
+		// reset media inheritance
 		mImageInherited = null;
 		mImageLinkingDrawable = 0;
-		for (int i = 0; i < MediaPhone.MAX_AUDIO_ITEMS; i++) {
-			mAudioInherited[i] = null;
-			mAudioLinkingDrawables[i] = 0;
-		}
+		mAudioInherited = null;
+		mAudioLinkingIndex = -1;
+		mAudioLinkingDrawable = 0;
 		mTextInherited = null;
 
 		// load existing content into buttons (no need to do any of this on new frames)
@@ -358,15 +359,15 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				imageLoaded = true;
 
 			} else if (!audioLoaded && currentType == MediaPhoneProvider.TYPE_AUDIO) {
-				// TODO: show inherited items first, followed by linked items, then normal items?
+				// we could inherit multiple audio items, but this becomes too complex, so we currently only allow one
 				mFrameAudioItems.put(currentItem.getInternalId(), currentItem.getDurationMilliseconds());
 				if (spanFrames) {
-					int arrayPosition = mFrameAudioItems.size() - 1;
+					mAudioLinkingIndex = mFrameAudioItems.size() - 1;
 					if (inheritedMedia) {
-						mAudioInherited[arrayPosition] = currentItem.getInternalId();
-						mAudioLinkingDrawables[arrayPosition] = R.drawable.ic_frame_audio_locked;
+						mAudioInherited = currentItem.getInternalId();
+						mAudioLinkingDrawable = R.drawable.ic_frame_audio_locked;
 					} else {
-						mAudioLinkingDrawables[arrayPosition] = R.drawable.ic_frame_audio_spanning;
+						mAudioLinkingDrawable = R.drawable.ic_frame_audio_spanning;
 					}
 				}
 				if (mFrameAudioItems.size() >= MediaPhone.MAX_AUDIO_ITEMS) {
@@ -460,9 +461,8 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		int audioIndex = 0;
 		for (Entry<String, Integer> audioMedia : mFrameAudioItems.entrySet()) {
 			audioButtons[audioIndex].setText(StringUtilities.millisecondsToTimeString(audioMedia.getValue(), false));
-			if (mAudioLinkingDrawables[audioIndex] != 0) {
-				audioButtons[audioIndex].setCompoundDrawablesWithIntrinsicBounds(0, mAudioLinkingDrawables[audioIndex],
-						0, 0);
+			if (audioIndex == mAudioLinkingIndex) {
+				audioButtons[audioIndex].setCompoundDrawablesWithIntrinsicBounds(0, mAudioLinkingDrawable, 0, 0);
 			}
 			audioIndex += 1;
 		}
@@ -553,7 +553,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		startActivityForResult(takePictureIntent, MediaPhone.R_id_intent_picture_editor);
 	}
 
-	private void editAudio(String parentId, int selectedAudioIndex) {
+	private void editAudio(String parentId, int selectedAudioIndex, boolean preventSpanning) {
 		final Intent recordAudioIntent = new Intent(FrameEditorActivity.this, AudioActivity.class);
 		recordAudioIntent.putExtra(getString(R.string.extra_parent_id), parentId);
 
@@ -567,6 +567,11 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				}
 				currentIndex += 1;
 			}
+		}
+
+		// unless we're editing (or replacing) inherited audio, or editing a single item we need to stop frame spanning
+		if (preventSpanning) {
+			recordAudioIntent.putExtra(getString(R.string.extra_prevent_frame_spanning), true);
 		}
 
 		startActivityForResult(recordAudioIntent, MediaPhone.R_id_intent_audio_editor);
@@ -626,7 +631,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 			case R.id.button_record_audio_2:
 			case R.id.button_record_audio_3:
 				final int selectedAudioIndex = getAudioIndex(buttonId);
-				if (mAudioInherited[selectedAudioIndex] != null) {
+				if (mAudioInherited != null && selectedAudioIndex == mAudioLinkingIndex) {
 					AlertDialog.Builder builder = new AlertDialog.Builder(FrameEditorActivity.this);
 					builder.setTitle(R.string.span_media_edit_audio_title);
 					builder.setMessage(R.string.span_media_edit_audio);
@@ -636,25 +641,27 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 						public void onClick(DialogInterface dialog, int which) {
 							// find the parent frame of the media item we want to edit, switch to it, then edit
 							MediaItem inheritedAudio = MediaManager.findMediaByInternalId(getContentResolver(),
-									mAudioInherited[selectedAudioIndex]);
+									mAudioInherited);
 							if (inheritedAudio != null) {
 								final String newFrameId = inheritedAudio.getParentId();
 								saveLastEditedFrame(newFrameId);
-								editAudio(mFrameInternalId, selectedAudioIndex);
+								editAudio(mFrameInternalId, selectedAudioIndex, false);
 							}
 						}
 					});
 					builder.setPositiveButton(R.string.span_media_add_new, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int whichButton) {
-							endLinkedMediaItem(mAudioInherited[selectedAudioIndex], mFrameInternalId); // remove link
-							editAudio(mFrameInternalId, -1);
+							// remove the existing media links and edit a new audio item
+							endLinkedMediaItem(mAudioInherited, mFrameInternalId);
+							editAudio(mFrameInternalId, -1, false); // spanning is now allowed
 						}
 					});
 					AlertDialog alert = builder.create();
 					alert.show();
 				} else {
-					editAudio(mFrameInternalId, selectedAudioIndex);
+					boolean preventSpanning = mAudioLinkingIndex >= 0 && selectedAudioIndex != mAudioLinkingIndex;
+					editAudio(mFrameInternalId, selectedAudioIndex, preventSpanning); // no spanning if not already
 				}
 				break;
 

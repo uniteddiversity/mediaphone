@@ -1321,23 +1321,24 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					if (inheritedMedia.size() > 0) {
 						// check this frame's media for collisions with spanning items
 						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId,
-								true); // need inherited media for audio comparison
+								false); // no inherited items needed (now allow only one spanning audio item per frame)
 						ArrayList<MediaItem> mediaToRemove = new ArrayList<MediaItem>();
 						int audioCount = 0;
+						boolean hasSpanningAudio = false;
 						for (MediaItem existingMedia : frameMedia) {
 							if (existingMedia.getType() == MediaPhoneProvider.TYPE_AUDIO) {
 								audioCount += 1;
+								if (existingMedia.getSpanFrames()) {
+									hasSpanningAudio = true;
+									break;
+								}
 							}
 						}
 						for (final MediaItem newMedia : inheritedMedia) {
 							int currentType = newMedia.getType();
-							if (currentType == MediaPhoneProvider.TYPE_AUDIO) {
-								// TODO: should we have a priority here? (longest running items are most important?)
-								if (audioCount < MediaPhone.MAX_AUDIO_ITEMS) {
-									audioCount += 1; // audio doesn't override unless we're over the max item limit
-								} else {
-									mediaToRemove.add(newMedia); // over max audio items stops spanning - finished item
-								}
+							if (currentType == MediaPhoneProvider.TYPE_AUDIO
+									&& (audioCount >= MediaPhone.MAX_AUDIO_ITEMS || hasSpanningAudio)) {
+								mediaToRemove.add(newMedia); // spanning audio or >= max stops spanning - finished item
 							} else {
 								for (MediaItem existingMedia : frameMedia) {
 									if (existingMedia.getType() == currentType) {
@@ -1414,6 +1415,9 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 
 				if (isFrameSpanning) {
 
+					// TODO: here we need to inherit previous audio when turning spanning off - combine this function
+					// with inheritMediaAndDeleteItemLinks?
+
 					// get the known links to this media item and check the frames contain other media; remove if not
 					iconsToUpdate = MediaManager.findLinkedParentIdsByMediaId(contentResolver, mediaId);
 					ArrayList<String> removedIcons = new ArrayList<String>();
@@ -1443,17 +1447,21 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					for (String frameId : narrativeFrameIds) {
 						// need to add this media to all following frames until one that already has media of this type
 						ArrayList<MediaItem> frameMedia = MediaManager.findMediaByParentId(contentResolver, frameId,
-								true); // need inherited media for audio comparison
+								false); // no inherited items needed (now allow only one spanning audio item per frame)
 						boolean mediaFound = false;
 						if (mediaType == MediaPhoneProvider.TYPE_AUDIO) {
 							int audioCount = 0;
+							boolean hasSpanningAudio = false;
 							for (MediaItem existingMedia : frameMedia) {
 								if (existingMedia.getType() == MediaPhoneProvider.TYPE_AUDIO) {
 									audioCount += 1;
+									if (existingMedia.getSpanFrames()) {
+										hasSpanningAudio = true;
+										break;
+									}
 								}
 							}
-							// TODO: should we have a priority here? (longest running items are most important?)
-							if (audioCount >= MediaPhone.MAX_AUDIO_ITEMS) {
+							if (audioCount >= MediaPhone.MAX_AUDIO_ITEMS || hasSpanningAudio) {
 								mediaFound = true; // over max audio items stops spanning - finished item
 							}
 						} else {

@@ -88,6 +88,7 @@ public class AudioActivity extends MediaPhoneActivity {
 	private boolean mAudioPickerShown = false;
 
 	private boolean mRecordingIsAllowed; // TODO: currently extension-based, but we can't actually process all AAC files
+	private boolean mFrameSpanningPrevented;
 	private boolean mDoesNotHaveMicrophone;
 	private PathAndStateSavingMediaRecorder mMediaRecorder;
 	private MediaPlayer mMediaPlayer;
@@ -143,6 +144,17 @@ public class AudioActivity extends MediaPhoneActivity {
 			mAudioPickerShown = savedInstanceState.getBoolean(getString(R.string.extra_external_chooser_shown), false);
 			if (mHasEditedMedia) {
 				setBackButtonIcons(AudioActivity.this, R.id.button_finished_audio, R.id.button_cancel_recording, true);
+			}
+		}
+
+		// prevent spanning if appropriate
+		Intent launchIntent = getIntent();
+		if (launchIntent != null) {
+			// hide the spanning button if we're not allowed to span from this item
+			mFrameSpanningPrevented = launchIntent.getBooleanExtra(getString(R.string.extra_prevent_frame_spanning),
+					false);
+			if (mFrameSpanningPrevented) {
+				findViewById(R.id.button_toggle_mode_audio).setVisibility(View.GONE);
 			}
 		}
 
@@ -852,6 +864,9 @@ public class AudioActivity extends MediaPhoneActivity {
 			addAudioIntent.putExtra(getString(R.string.extra_parent_id), newFrameId);
 			if (mContinueRecordingAfterSplit) {
 				addAudioIntent.putExtra(getString(R.string.extra_start_recording_audio), mContinueRecordingAfterSplit);
+			}
+			if (mFrameSpanningPrevented) {
+				addAudioIntent.putExtra(getString(R.string.extra_prevent_frame_spanning), true);
 			}
 			startActivity(addAudioIntent);
 

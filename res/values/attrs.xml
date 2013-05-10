@@ -167,6 +167,7 @@
     <string name="extra_playback_non_audio_offset">playback_non_audio_offset</string>
     <string name="extra_switch_to_landscape_camera">switch_to_landscape_camera</string>
     <string name="extra_start_recording_audio">start_recording_audio</string>
+    <string name="extra_prevent_frame_spanning">prevent_frame_spanning</string>
     <string name="extra_start_scrolled_to_end">start_scrolled_to_end</string>
 
     <!-- layout related -->

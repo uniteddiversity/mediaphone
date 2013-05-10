@@ -384,7 +384,7 @@ public class NarrativePlayerActivity extends MediaPhoneActivity {
 		String currentAudioItem = null;
 		boolean soundPoolAllowed = !DebugUtilities.hasSoundPoolBug();
 		for (int i = 0, n = container.mAudioDurations.size(); i < n; i++) {
-			if (container.mAudioDurations.get(i).intValue() == container.mFrameMaxDuration) {
+			if (container.mAudioDurations.get(i).intValue() >= container.mFrameMaxDuration && currentAudioItem == null) {
 				currentAudioItem = container.mAudioPaths.get(i);
 			} else {
 				// playing *anything* in SoundPool at the same time as MediaPlayer crashes on Galaxy Tab

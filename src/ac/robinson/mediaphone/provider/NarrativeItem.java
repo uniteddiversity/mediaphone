@@ -21,6 +21,7 @@
 package ac.robinson.mediaphone.provider;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import ac.robinson.mediaphone.MediaPhone;
 import ac.robinson.mediautilities.FrameMediaContainer;
@@ -110,30 +111,33 @@ public class NarrativeItem implements BaseColumns {
 	public ArrayList<FrameMediaContainer> getContentList(ContentResolver contentResolver) {
 
 		ArrayList<FrameMediaContainer> exportedContent = new ArrayList<FrameMediaContainer>();
+		HashMap<String, Integer> longRunningAudio = new HashMap<String, Integer>(); // so we can adjust durations
 
 		ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, mInternalId);
 		for (FrameItem frame : narrativeFrames) {
+			final String frameId = frame.getInternalId();
+			ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, frameId);
 
-			ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver,
-					frame.getInternalId());
-
-			final FrameMediaContainer currentContainer = new FrameMediaContainer(frame.getInternalId(),
+			final FrameMediaContainer currentContainer = new FrameMediaContainer(frameId,
 					frame.getNarrativeSequenceId());
 
 			currentContainer.mParentId = frame.getParentId();
 
 			for (MediaItem media : frameComponents) {
+				final String mediaPath = media.getFile().getAbsolutePath();
+				final int mediaType = media.getType();
+				boolean spanningAudio = false;
 
-				switch (media.getType()) {
+				switch (mediaType) {
 					case MediaPhoneProvider.TYPE_IMAGE_FRONT:
 						currentContainer.mImageIsFrontCamera = true;
 					case MediaPhoneProvider.TYPE_IMAGE_BACK:
 					case MediaPhoneProvider.TYPE_VIDEO:
-						currentContainer.mImagePath = media.getFile().getAbsolutePath();
+						currentContainer.mImagePath = mediaPath;
 						break;
 
 					case MediaPhoneProvider.TYPE_TEXT:
-						currentContainer.mTextContent = IOUtilities.getFileContents(media.getFile().getAbsolutePath());
+						currentContainer.mTextContent = IOUtilities.getFileContents(mediaPath);
 						if (!TextUtils.isEmpty(currentContainer.mTextContent)) {
 							currentContainer.updateFrameMaxDuration(MediaItem
 									.getTextDurationMilliseconds(currentContainer.mTextContent));
@@ -143,22 +147,50 @@ public class NarrativeItem implements BaseColumns {
 						break;
 
 					case MediaPhoneProvider.TYPE_AUDIO:
-						currentContainer.addAudioFile(media.getFile().getAbsolutePath(),
-								media.getDurationMilliseconds());
+						currentContainer.addAudioFile(mediaPath, media.getDurationMilliseconds());
+						spanningAudio = media.getSpanFrames();
 						break;
 				}
 
-				currentContainer.updateFrameMaxDuration(media.getDurationMilliseconds());
-			}
-
-			// don't allow frames to be shorter than the minimum duration
-			if (currentContainer.mFrameMaxDuration <= 0) {
-				currentContainer.updateFrameMaxDuration(MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION);
+				// frame spanning images and text can just be repeated; audio needs to be split between frames
+				// here we count the number of frames to split between so we can equalise later
+				if (spanningAudio) {
+					if (frameId.equals(media.getParentId())) {
+						longRunningAudio.put(mediaPath, 1); // this is the actual parent frame
+					} else {
+						// this is a linked frame - increase the count
+						Integer existingAudioCount = longRunningAudio.remove(mediaPath);
+						if (existingAudioCount != null) {
+							longRunningAudio.put(mediaPath, existingAudioCount + 1);
+						}
+					}
+				} else {
+					currentContainer.updateFrameMaxDuration(media.getDurationMilliseconds());
+				}
 			}
 
 			exportedContent.add(currentContainer);
 		}
 
+		// now check all long-running audio tracks to split the audio's duration between all spanned frames
+		// TODO: this doesn't really respect/control other non-spanning audio (e.g., a longer sub-track than
+		// duration/count) - should decide whether it's best to split lengths equally regardless of this; adapt and pad
+		// equally but leaving a longer duration for the sub-track; or, use sub-track duration as frame duration
+		for (FrameMediaContainer container : exportedContent) {
+			boolean longAudioFound = false;
+			for (int i = 0, n = container.mAudioPaths.size(); i < n; i++) {
+				final Integer audioCount = longRunningAudio.get(container.mAudioPaths.get(i));
+				if (audioCount != null) {
+					container.updateFrameMaxDuration(container.mAudioDurations.get(i) / audioCount);
+					longAudioFound = true;
+				}
+			}
+
+			// don't allow non-spanned frames to be shorter than the minimum duration
+			if (!longAudioFound && container.mFrameMaxDuration <= 0) {
+				container.updateFrameMaxDuration(MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION);
+			}
+		}
 		return exportedContent;
 	}
 
