@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -2327,8 +2328,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		};
 	}
 
-	protected BackgroundRunnable getNarrativeTemplateRunnable(final String fromId, final String toId,
-			final boolean toTemplate) {
+	protected BackgroundRunnable getNarrativeTemplateRunnable(final String fromId, final boolean toTemplate) {
 		return new BackgroundRunnable() {
 			@Override
 			public int getTaskId() {
@@ -2346,6 +2346,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				Resources resources = getResources();
 				ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, fromId);
 
+				final String toId = MediaPhoneProvider.getNewInternalId();
 				final NarrativeItem newItem;
 				if (toTemplate) {
 					newItem = new NarrativeItem(toId, NarrativesManager.getNextTemplateExternalId(contentResolver));
@@ -2359,6 +2360,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				boolean updateFirstFrame = true;
 				ArrayList<String> fromFiles = new ArrayList<String>();
 				ArrayList<String> toFiles = new ArrayList<String>();
+				HashMap<String, String> linkedMedia = new HashMap<String, String>();
 				for (FrameItem frame : narrativeFrames) {
 					final FrameItem newFrame = FrameItem.fromExisting(frame, MediaPhoneProvider.getNewInternalId(),
 							toId, newCreationDate);
@@ -2373,26 +2375,39 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					}
 
 					for (MediaItem media : MediaManager.findMediaByParentId(contentResolver, frame.getInternalId())) {
-						final MediaItem newMedia = MediaItem.fromExisting(media, MediaPhoneProvider.getNewInternalId(),
-								newFrameId, newCreationDate);
-						MediaManager.addMedia(contentResolver, newMedia);
-						if (updateFirstFrame) {
-							// must always copy the first frame's media
-							try {
-								IOUtilities.copyFile(media.getFile(), newMedia.getFile());
-							} catch (IOException e) {
-								// TODO: error
+						// this is a linked item - create a new link rather than copying media
+						boolean spanningMedia = media.getSpanFrames();
+						if (spanningMedia && !media.getParentId().equals(frame.getInternalId())) {
+							final String linkedId = linkedMedia.get(media.getInternalId()); // get the new linked id;
+							if (linkedId != null) {
+								MediaManager.addMediaLink(contentResolver, newFrameId, linkedId);
 							}
 						} else {
-							// queue copying other media
-							fromFiles.add(media.getFile().getAbsolutePath());
-							try {
-								newMedia.getFile().createNewFile(); // add an empty file so that if they open the item
-																	// before copying completes it won't get deleted
-							} catch (IOException e) {
-								// TODO: error
+							final MediaItem newMedia = MediaItem.fromExisting(media,
+									MediaPhoneProvider.getNewInternalId(), newFrameId, newCreationDate);
+							MediaManager.addMedia(contentResolver, newMedia);
+							if (spanningMedia) {
+								linkedMedia.put(media.getInternalId(), newMedia.getInternalId()); // for copying links
 							}
-							toFiles.add(newMedia.getFile().getAbsolutePath());
+							if (updateFirstFrame) {
+								// must always copy the first frame's media
+								try {
+									IOUtilities.copyFile(media.getFile(), newMedia.getFile());
+								} catch (IOException e) {
+									// TODO: error
+								}
+							} else {
+								// queue copying other media
+								fromFiles.add(media.getFile().getAbsolutePath());
+								try {
+									newMedia.getFile().createNewFile(); // add an empty file so that if they open the
+																		// item before copying it won't get deleted
+																		// TODO: checking length() > 0 negates this...
+								} catch (IOException e) {
+									// TODO: error
+								}
+								toFiles.add(newMedia.getFile().getAbsolutePath());
+							}
 						}
 					}
 					FramesManager.addFrame(resources, contentResolver, newFrame, updateFirstFrame);

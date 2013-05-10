@@ -29,7 +29,6 @@ import ac.robinson.mediaphone.MediaPhoneActivity;
 import ac.robinson.mediaphone.R;
 import ac.robinson.mediaphone.provider.FrameItem;
 import ac.robinson.mediaphone.provider.FramesManager;
-import ac.robinson.mediaphone.provider.MediaPhoneProvider;
 import ac.robinson.mediaphone.provider.NarrativeItem;
 import ac.robinson.mediaphone.provider.NarrativesManager;
 import ac.robinson.mediautilities.FrameMediaContainer;
@@ -194,8 +193,7 @@ public class NarrativePlayerActivity extends MediaPhoneActivity {
 			case R.id.menu_make_template:
 				FrameItem templateFrame = FramesManager.findFrameByInternalId(getContentResolver(),
 						mCurrentFrameContainer.mFrameId);
-				runQueuedBackgroundTask(getNarrativeTemplateRunnable(templateFrame.getParentId(),
-						MediaPhoneProvider.getNewInternalId(), true)); // don't need the id
+				runQueuedBackgroundTask(getNarrativeTemplateRunnable(templateFrame.getParentId(), true));
 				// TODO: do we need to keep the screen on?
 				return true;
 
