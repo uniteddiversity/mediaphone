@@ -71,7 +71,9 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 
 	// the ids of inherited (spanned) media items from previous frames
 	private String mImageInherited;
+	private int mImageLinkingDrawable;
 	private String[] mAudioInherited = new String[MediaPhone.MAX_AUDIO_ITEMS];
+	private int[] mAudioLinkingDrawables = new int[MediaPhone.MAX_AUDIO_ITEMS];
 	private String mTextInherited;
 
 	@Override
@@ -322,8 +324,10 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text, 0, 0);
 
 		mImageInherited = null;
+		mImageLinkingDrawable = 0;
 		for (int i = 0; i < MediaPhone.MAX_AUDIO_ITEMS; i++) {
 			mAudioInherited[i] = null;
+			mAudioLinkingDrawables[i] = 0;
 		}
 		mTextInherited = null;
 
@@ -334,23 +338,37 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		boolean textLoaded = false;
 		for (MediaItem currentItem : frameComponents) {
 			final int currentType = currentItem.getType();
+			final boolean spanFrames = currentItem.getSpanFrames();
+			final boolean inheritedMedia = !currentItem.getParentId().equals(mFrameInternalId);
 			if (!imageLoaded
 					&& (currentType == MediaPhoneProvider.TYPE_IMAGE_BACK
 							|| currentType == MediaPhoneProvider.TYPE_IMAGE_FRONT || currentType == MediaPhoneProvider.TYPE_VIDEO)) {
 				mReloadImagePath = currentItem.getFile().getAbsolutePath();
-				mImageInherited = (currentItem.getSpanFrames() && !currentItem.getParentId().equals(mFrameInternalId)) ? currentItem
-						.getInternalId() : null;
-				if (mImageInherited != null) {
+				if (spanFrames) {
 					// this was originally going to be done in onDraw of CenteredImageTextButton, but there's a
 					// bizarre bug that causes the canvas to be translated just over 8000 pixels to the left before
 					// it's given to our onDraw method - instead we now use a layer drawable when loading
+					if (inheritedMedia) {
+						mImageInherited = currentItem.getInternalId();
+						mImageLinkingDrawable = R.drawable.ic_frame_image_locked;
+					} else {
+						mImageLinkingDrawable = R.drawable.ic_frame_image_spanning;
+					}
 				}
 				imageLoaded = true;
 
 			} else if (!audioLoaded && currentType == MediaPhoneProvider.TYPE_AUDIO) {
+				// TODO: show inherited items first, followed by linked items, then normal items?
 				mFrameAudioItems.put(currentItem.getInternalId(), currentItem.getDurationMilliseconds());
-				mAudioInherited[mFrameAudioItems.size() - 1] = (currentItem.getSpanFrames() && !currentItem
-						.getParentId().equals(mFrameInternalId)) ? currentItem.getInternalId() : null;
+				if (spanFrames) {
+					int arrayPosition = mFrameAudioItems.size() - 1;
+					if (inheritedMedia) {
+						mAudioInherited[arrayPosition] = currentItem.getInternalId();
+						mAudioLinkingDrawables[arrayPosition] = R.drawable.ic_frame_audio_locked;
+					} else {
+						mAudioLinkingDrawables[arrayPosition] = R.drawable.ic_frame_audio_spanning;
+					}
+				}
 				if (mFrameAudioItems.size() >= MediaPhone.MAX_AUDIO_ITEMS) {
 					audioLoaded = true;
 				}
@@ -359,10 +377,13 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				String textSnippet = IOUtilities.getFileContentSnippet(currentItem.getFile().getAbsolutePath(),
 						getResources().getInteger(R.integer.text_snippet_length));
 				textButton.setText(textSnippet);
-				mTextInherited = (currentItem.getSpanFrames() && !currentItem.getParentId().equals(mFrameInternalId)) ? currentItem
-						.getInternalId() : null;
-				if (mTextInherited != null) {
-					textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text_locked, 0, 0);
+				if (spanFrames) {
+					if (inheritedMedia) {
+						mTextInherited = currentItem.getInternalId();
+						textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text_locked, 0, 0);
+					} else {
+						textButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_text_spanning, 0, 0);
+					}
 				}
 				textLoaded = true;
 			}
@@ -439,8 +460,8 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 		int audioIndex = 0;
 		for (Entry<String, Integer> audioMedia : mFrameAudioItems.entrySet()) {
 			audioButtons[audioIndex].setText(StringUtilities.millisecondsToTimeString(audioMedia.getValue(), false));
-			if (mAudioInherited[audioIndex] != null) {
-				audioButtons[audioIndex].setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_frame_audio_locked,
+			if (mAudioLinkingDrawables[audioIndex] != 0) {
+				audioButtons[audioIndex].setCompoundDrawablesWithIntrinsicBounds(0, mAudioLinkingDrawables[audioIndex],
 						0, 0);
 			}
 			audioIndex += 1;
@@ -471,10 +492,10 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				.getWidth() : cameraButton.getHeight()) * resourceValue.getFloat());
 		BitmapDrawable cachedIcon = new BitmapDrawable(resources, BitmapUtilities.loadAndCreateScaledBitmap(imagePath,
 				pictureSize, pictureSize, BitmapUtilities.ScalingLogic.CROP, true));
-		if (mImageInherited != null) {
+		if (mImageLinkingDrawable != 0) {
 			Drawable[] layers = new Drawable[2];
 			layers[0] = cachedIcon;
-			layers[1] = resources.getDrawable(R.drawable.ic_frame_image_locked);
+			layers[1] = resources.getDrawable(mImageLinkingDrawable);
 			LayerDrawable layerDrawable = new LayerDrawable(layers);
 			layerDrawable.setLayerInset(1, pictureSize - layers[1].getIntrinsicHeight(),
 					pictureSize - layers[1].getIntrinsicWidth(), 0, 0);
