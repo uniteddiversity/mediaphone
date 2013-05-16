@@ -478,11 +478,11 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	protected void setBackButtonIcons(Activity activity, int button1, int button2, boolean isEdited) {
 		if (button1 != 0) {
 			((CenteredImageTextButton) findViewById(button1)).setCompoundDrawablesWithIntrinsicBounds(0,
-					(isEdited ? R.drawable.ic_finished_editing : R.drawable.ic_menu_back), 0, 0);
+					(isEdited ? R.drawable.ic_menu_accept : R.drawable.ic_menu_back), 0, 0);
 		}
 		if (button2 != 0) {
 			((CenteredImageTextButton) findViewById(button2)).setCompoundDrawablesWithIntrinsicBounds(0,
-					(isEdited ? R.drawable.ic_finished_editing : R.drawable.ic_menu_back), 0, 0);
+					(isEdited ? R.drawable.ic_menu_accept : R.drawable.ic_menu_back), 0, 0);
 		}
 		UIUtilities.refreshActionBar(activity);
 	}

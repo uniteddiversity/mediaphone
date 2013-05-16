@@ -606,7 +606,7 @@ public class AudioActivity extends MediaPhoneActivity {
 				scheduleNextAudioTextUpdate(getResources().getInteger(R.integer.audio_timer_update_interval));
 				CenteredImageTextButton recordButton = (CenteredImageTextButton) findViewById(R.id.button_record_audio);
 				recordButton.setEnabled(true);
-				recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_pause, 0, 0);
+				recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_audio_pause, 0, 0);
 			}
 		});
 	}
@@ -620,7 +620,7 @@ public class AudioActivity extends MediaPhoneActivity {
 		mAudioRecordingInProgress = false;
 		CenteredImageTextButton recordButton = (CenteredImageTextButton) findViewById(R.id.button_record_audio);
 		recordButton.setEnabled(true);
-		recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_record, 0, 0);
+		recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_audio_record, 0, 0);
 		UIUtilities.releaseKeepScreenOn(getWindow());
 	}
 
@@ -1165,7 +1165,7 @@ public class AudioActivity extends MediaPhoneActivity {
 		}
 		mNextBlinkMode = R.id.msg_blink_icon_off;
 		((CenteredImageTextButton) findViewById(R.id.button_record_audio)).setCompoundDrawablesWithIntrinsicBounds(0,
-				R.drawable.ic_record, 0, 0); // reset the button icon
+				R.drawable.ic_audio_record, 0, 0); // reset the button icon
 	}
 
 	private final Runnable mButtonIconBlinkTask = new Runnable() {
@@ -1192,9 +1192,9 @@ public class AudioActivity extends MediaPhoneActivity {
 		if (mButtonIconBlinkScheduler != null && !mButtonIconBlinkScheduler.isShutdown()) {
 			CenteredImageTextButton recordButton = (CenteredImageTextButton) findViewById(R.id.button_record_audio);
 			if (currentBlinkMode == R.id.msg_blink_icon_on) {
-				recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_record_paused, 0, 0);
+				recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_audio_resume, 0, 0);
 			} else {
-				recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_record, 0, 0);
+				recordButton.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_audio_record, 0, 0);
 			}
 			mNextBlinkMode = (currentBlinkMode == R.id.msg_blink_icon_on ? R.id.msg_blink_icon_off
 					: R.id.msg_blink_icon_on);

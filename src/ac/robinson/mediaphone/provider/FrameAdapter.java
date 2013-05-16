@@ -199,7 +199,7 @@ public class FrameAdapter extends CursorAdapter implements FilterQueryProvider {
 
 		if (FrameItem.KEY_FRAME_ID_START.equals(holder.frameInternalId)
 				|| FrameItem.KEY_FRAME_ID_END.equals(holder.frameInternalId)) {
-			holder.display.setImageResource(R.drawable.ic_menu_add);
+			holder.display.setImageResource(R.drawable.ic_narratives_add);
 			// holder.display.setBackgroundResource(R.drawable.button_white_small);
 			holder.loader.setVisibility(View.GONE);
 			holder.queryIcon = false;
