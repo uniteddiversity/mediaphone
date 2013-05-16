@@ -960,54 +960,6 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	}
 
 	/**
-	 * Returns a list of the frame ids following the given frame id. If includePrevious is set then the frame before the
-	 * given frame will also be included. If not then the list will start from one after the current frame. If
-	 * includePrevious is true, the first element of the returned list may be null (as the start frame could be the
-	 * first frame of the narrative).
-	 * 
-	 * @param frameId
-	 * @param includeCurrentAndPrevious Whether to include the previous frame in the list as well
-	 */
-	private ArrayList<String> getFollowingFrameIds(String frameId, boolean includeCurrentAndPrevious) {
-		if (frameId == null) {
-			return null;
-		}
-		FrameItem parentFrame = FramesManager.findFrameByInternalId(getContentResolver(), frameId);
-		return getFollowingFrameIds(parentFrame, includeCurrentAndPrevious);
-	}
-
-	private ArrayList<String> getFollowingFrameIds(FrameItem parentFrame, boolean includePrevious) {
-		if (parentFrame == null) {
-			return null;
-		}
-
-		final String parentFrameId = parentFrame.getInternalId();
-		ArrayList<String> narrativeFrameIds = FramesManager.findFrameIdsByParentId(getContentResolver(),
-				parentFrame.getParentId());
-		ArrayList<String> idsToRemove = new ArrayList<String>();
-
-		// used to use an iterator here, but it turns out that remove() can fail silently (!)
-		String previousFrameId = null;
-		for (final String frameId : narrativeFrameIds) {
-			idsToRemove.add(frameId);
-			if (parentFrameId.equals(frameId)) {
-				break;
-			}
-			previousFrameId = frameId;
-		}
-
-		// remove irrelevant frames; preserve previous if necessary
-		if (includePrevious) {
-			idsToRemove.remove(previousFrameId);
-		}
-		narrativeFrameIds.removeAll(idsToRemove);
-		if (includePrevious && previousFrameId == null) {
-			narrativeFrameIds.add(0, null); // need this null to show that no previous frame is present
-		}
-		return narrativeFrameIds;
-	}
-
-	/**
 	 * Update the span frames button with the given id to show the correct icon for media spanning multiple frames
 	 * 
 	 * @param buttonId
@@ -1024,23 +976,6 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		} else {
 			spanFramesButton.setCompoundDrawablesWithIntrinsicBounds(0, spanFrames ? R.drawable.ic_menu_span_frames_on
 					: R.drawable.ic_menu_span_frames_off, 0, 0);
-		}
-	}
-
-	/**
-	 * Update a list of frame icons, removing from the cache first to ensure the old version is not displayed
-	 * 
-	 * @param frameIds
-	 */
-	private void updateMultipleFrameIcons(ArrayList<String> frameIds) {
-		for (String frameId : frameIds) {
-			ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(frameId));
-		}
-
-		Resources resources = getResources();
-		ContentResolver contentResolver = getContentResolver();
-		for (String frameId : frameIds) {
-			FramesManager.reloadFrameIcon(resources, contentResolver, frameId);
 		}
 	}
 
@@ -1085,13 +1020,15 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			@Override
 			public void run() {
 				ContentResolver contentResolver = getContentResolver();
+				Resources resources = getResources();
 				if (updateCurrentIcon) {
 					FramesManager.reloadFrameIcon(getResources(), contentResolver, parentId);
 				}
 
 				// if applicable, update all frame items that link to this media item
 				if (updateMultipleIcons) {
-					updateMultipleFrameIcons(MediaManager.findLinkedParentIdsByMediaId(contentResolver, internalId));
+					FramesManager.reloadFrameIcons(resources, contentResolver,
+							MediaManager.findLinkedParentIdsByMediaId(contentResolver, internalId));
 				}
 			}
 		});
@@ -1121,7 +1058,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			public void run() {
 				// we only need the parent ids of frames after (not including) the current one
 				ContentResolver contentResolver = getContentResolver();
-				ArrayList<String> narrativeFrameIds = getFollowingFrameIds(startFrameId, false);
+				ArrayList<String> narrativeFrameIds = FramesManager.getFollowingFrameIds(contentResolver, startFrameId,
+						false);
 				if (narrativeFrameIds == null) {
 					return;
 				}
@@ -1161,7 +1099,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// finally, update icons for changed frames
-				updateMultipleFrameIcons(iconsToUpdate);
+				FramesManager.reloadFrameIcons(getResources(), contentResolver, iconsToUpdate);
 			}
 		});
 
@@ -1187,7 +1125,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		// first get a list of the frames that could need updating
 		ContentResolver contentResolver = getContentResolver();
 		FrameItem parentFrame = FramesManager.findFrameByInternalId(contentResolver, startFrameId);
-		final ArrayList<String> narrativeFrameIds = getFollowingFrameIds(parentFrame, true);
+		final ArrayList<String> narrativeFrameIds = FramesManager.getFollowingFrameIds(contentResolver, parentFrame,
+				true);
 		if (narrativeFrameIds == null) {
 			return; // no frames found - error; won't be able to update anything
 		}
@@ -1375,7 +1314,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// finally, update icons for changed frames (must be done last so the links no longer exist)
-				updateMultipleFrameIcons(iconsToUpdate);
+				FramesManager.reloadFrameIcons(getResources(), contentResolver, iconsToUpdate);
 			}
 		});
 	}
@@ -1438,7 +1377,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				} else {
 
 					iconsToUpdate = new ArrayList<String>();
-					ArrayList<String> narrativeFrameIds = getFollowingFrameIds(parentId, false);
+					ArrayList<String> narrativeFrameIds = FramesManager.getFollowingFrameIds(contentResolver, parentId,
+							false);
 					if (narrativeFrameIds == null) {
 						return; // nothing we can do - we have no frame ids to propagate to, so can't enable spanning
 					}
@@ -1484,7 +1424,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				}
 
 				// finally, update icons for changed frames (must be done last so the link no longer exists)
-				updateMultipleFrameIcons(iconsToUpdate);
+				FramesManager.reloadFrameIcons(getResources(), contentResolver, iconsToUpdate);
 			}
 		});
 

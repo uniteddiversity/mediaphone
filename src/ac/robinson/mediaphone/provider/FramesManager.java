@@ -59,6 +59,20 @@ public class FramesManager {
 		mDeletedSelection = selection.toString();
 	}
 
+	/**
+	 * Update a list of frame icons, removing all icons from the cache first to ensure the old version is not displayed
+	 * 
+	 * @param frameIds
+	 */
+	public static void reloadFrameIcons(Resources resources, ContentResolver contentResolver, ArrayList<String> frameIds) {
+		for (String frameId : frameIds) {
+			ImageCacheUtilities.setLoadingIcon(FrameItem.getCacheId(frameId));
+		}
+		for (String frameId : frameIds) {
+			reloadFrameIcon(resources, contentResolver, frameId);
+		}
+	}
+
 	public static void reloadFrameIcon(Resources resources, ContentResolver contentResolver, FrameItem frame,
 			boolean frameIsInDatabase) {
 		if (frame == null) {
@@ -282,5 +296,54 @@ public class FramesManager {
 			}
 		}
 		return frameIds;
+	}
+
+	/**
+	 * Returns a list of the frame ids following the given frame id. If includePrevious is set then the frame before the
+	 * given frame will also be included. If not then the list will start from one after the current frame. If
+	 * includePrevious is true, the first element of the returned list may be null (as the start frame could be the
+	 * first frame of the narrative).
+	 * 
+	 * @param frameId
+	 * @param includeCurrentAndPrevious Whether to include the previous frame in the list as well
+	 */
+	public static ArrayList<String> getFollowingFrameIds(ContentResolver contentResolver, String frameId,
+			boolean includeCurrentAndPrevious) {
+		if (frameId == null) {
+			return null;
+		}
+		FrameItem parentFrame = findFrameByInternalId(contentResolver, frameId);
+		return getFollowingFrameIds(contentResolver, parentFrame, includeCurrentAndPrevious);
+	}
+
+	public static ArrayList<String> getFollowingFrameIds(ContentResolver contentResolver, FrameItem parentFrame,
+			boolean includePrevious) {
+		if (parentFrame == null) {
+			return null;
+		}
+
+		final String parentFrameId = parentFrame.getInternalId();
+		ArrayList<String> narrativeFrameIds = findFrameIdsByParentId(contentResolver, parentFrame.getParentId());
+		ArrayList<String> idsToRemove = new ArrayList<String>();
+
+		// used to use an iterator here, but it turns out that remove() can fail silently (!)
+		String previousFrameId = null;
+		for (final String frameId : narrativeFrameIds) {
+			idsToRemove.add(frameId);
+			if (parentFrameId.equals(frameId)) {
+				break;
+			}
+			previousFrameId = frameId;
+		}
+
+		// remove irrelevant frames; preserve previous if necessary
+		if (includePrevious) {
+			idsToRemove.remove(previousFrameId);
+		}
+		narrativeFrameIds.removeAll(idsToRemove);
+		if (includePrevious && previousFrameId == null) {
+			narrativeFrameIds.add(0, null); // need this null to show that no previous frame is present
+		}
+		return narrativeFrameIds;
 	}
 }
