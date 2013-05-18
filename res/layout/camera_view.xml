@@ -30,7 +30,7 @@
             android:layout_alignParentLeft="true"
             android:layout_alignParentTop="true"
             android:background="@android:color/transparent"
-            android:drawableTop="@drawable/ic_rotate_anticlockwise"
+            android:drawableTop="@drawable/ic_image_rotate_anticlockwise"
             android:visibility="gone" /> <!-- TODO: if re-enabling this, make sure to add an anticlockwise animation -->
 
         <ac.robinson.view.CenteredImageTextButton
@@ -41,7 +41,7 @@
             android:layout_alignParentRight="true"
             android:layout_alignParentTop="true"
             android:background="@android:color/transparent"
-            android:drawableTop="@drawable/ic_rotate_clockwise" />
+            android:drawableTop="@drawable/ic_image_rotate_clockwise" />
     </RelativeLayout>
 
     <LinearLayout
