@@ -1110,15 +1110,23 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 	private void animateButtonRotation(Resources res, int animation, int button, int icon, int previousRotation) {
 		CenteredImageTextButton imageButton = (CenteredImageTextButton) findViewById(button);
 		Bitmap currentBitmap = BitmapFactory.decodeResource(res, icon);
-		Drawable buttonIcon = new BitmapDrawable(res, BitmapUtilities.rotate(currentBitmap, previousRotation,
-				currentBitmap.getWidth() / 2, currentBitmap.getHeight() / 2)); // need previous rotation to correct diff
-		buttonIcon.setBounds(0, 0, buttonIcon.getIntrinsicWidth(), buttonIcon.getIntrinsicHeight());
-		Animation rotationAnimation = AnimationUtils.loadAnimation(this, animation);
-		rotationAnimation.initialize(buttonIcon.getIntrinsicWidth(), buttonIcon.getIntrinsicHeight(),
-				imageButton.getWidth(), imageButton.getHeight());
-		rotationAnimation.start();
-		imageButton.setCompoundDrawablesWithIntrinsicBounds(null, new AnimateDrawable(buttonIcon, rotationAnimation),
-				null, null);
+		if (currentBitmap == null) {
+			Drawable bitmapDrawable = res.getDrawable(icon);
+			if (bitmapDrawable instanceof BitmapDrawable) {
+				currentBitmap = ((BitmapDrawable) bitmapDrawable).getBitmap();
+			}
+		}
+		if (currentBitmap != null) {
+			Drawable buttonIcon = new BitmapDrawable(res, BitmapUtilities.rotate(currentBitmap, previousRotation,
+					currentBitmap.getWidth() / 2, currentBitmap.getHeight() / 2));
+			buttonIcon.setBounds(0, 0, buttonIcon.getIntrinsicWidth(), buttonIcon.getIntrinsicHeight());
+			Animation rotationAnimation = AnimationUtils.loadAnimation(this, animation);
+			rotationAnimation.initialize(buttonIcon.getIntrinsicWidth(), buttonIcon.getIntrinsicHeight(),
+					imageButton.getWidth(), imageButton.getHeight());
+			rotationAnimation.start();
+			imageButton.setCompoundDrawablesWithIntrinsicBounds(null,
+					new AnimateDrawable(buttonIcon, rotationAnimation), null, null);
+		}
 	}
 
 	@Override
@@ -1147,45 +1155,51 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 			mCameraView.setRotation(mDisplayOrientation, mDisplayOrientation);
 		}
 
-		// get the difference between the current and previous orientations
-		int animation = 0;
-		int rotationDifference = ((mIconRotation - correctedRotation + 360) % 360);
-		switch (rotationDifference) {
-			case 270:
-				animation = R.anim.rotate_clockwise_90;
-				break;
-			case 90:
-				animation = R.anim.rotate_anticlockwise_90;
-				break;
-			case 180:
-				animation = R.anim.rotate_clockwise_180;
-				break;
-		}
+		// we only need to animate rotations if we're in camera mode
+		if (mDisplayMode == DisplayMode.TAKE_PICTURE) {
 
-		if (animation == 0) {
-			return; // no need to change icons - no difference in orientation
-		}
+			// get the difference between the current and previous orientations
+			int animation = 0;
+			int rotationDifference = ((mIconRotation - correctedRotation + 360) % 360);
+			switch (rotationDifference) {
+				case 270:
+					animation = R.anim.rotate_clockwise_90;
+					break;
+				case 90:
+					animation = R.anim.rotate_anticlockwise_90;
+					break;
+				case 180:
+					animation = R.anim.rotate_clockwise_180;
+					break;
+			}
 
-		// animate rotating the button icons
-		Resources res = getResources();
-		animateButtonRotation(res, animation, R.id.button_take_picture, R.drawable.ic_menu_take_picture, mIconRotation);
-		animateButtonRotation(res, animation, R.id.button_import_image, R.drawable.ic_menu_import_picture,
-				mIconRotation);
+			if (animation == 0) {
+				return; // no need to change icons - no difference in orientation
+			}
 
-		if (findViewById(R.id.button_cancel_camera).getVisibility() == View.VISIBLE) {
-			animateButtonRotation(res, animation, R.id.button_cancel_camera, R.drawable.ic_menu_back, mIconRotation);
-		}
+			// animate rotating the button icons
+			Resources res = getResources();
+			animateButtonRotation(res, animation, R.id.button_take_picture, R.drawable.ic_menu_take_picture,
+					mIconRotation);
+			animateButtonRotation(res, animation, R.id.button_import_image, R.drawable.ic_menu_import_picture,
+					mIconRotation);
 
-		if (findViewById(R.id.button_switch_camera).getVisibility() == View.VISIBLE) {
-			animateButtonRotation(res, animation, R.id.button_switch_camera, R.drawable.ic_switch_camera, mIconRotation);
-		}
+			if (findViewById(R.id.button_cancel_camera).getVisibility() == View.VISIBLE) {
+				animateButtonRotation(res, animation, R.id.button_cancel_camera, R.drawable.ic_menu_back, mIconRotation);
+			}
 
-		// the flash button is done differently as its icon changes each time it is pressed
-		View flashButton = findViewById(R.id.button_toggle_flash);
-		if (flashButton.getVisibility() == View.VISIBLE) {
-			Integer imageTag = (Integer) flashButton.getTag();
-			if (imageTag != null) {
-				animateButtonRotation(res, animation, R.id.button_toggle_flash, imageTag, mIconRotation);
+			if (findViewById(R.id.button_switch_camera).getVisibility() == View.VISIBLE) {
+				animateButtonRotation(res, animation, R.id.button_switch_camera, R.drawable.ic_switch_camera,
+						mIconRotation);
+			}
+
+			// the flash button is done differently as its icon changes each time it is pressed
+			View flashButton = findViewById(R.id.button_toggle_flash);
+			if (flashButton.getVisibility() == View.VISIBLE) {
+				Integer imageTag = (Integer) flashButton.getTag();
+				if (imageTag != null) {
+					animateButtonRotation(res, animation, R.id.button_toggle_flash, imageTag, mIconRotation);
+				}
 			}
 		}
 
