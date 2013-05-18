@@ -635,7 +635,8 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 		int autofocusInterval = res.getInteger(R.integer.camera_autofocus_interval);
 
 		if (!mCameraConfiguration.hasFrontCamera || mCameraConfiguration.numberOfCameras <= 1) {
-			findViewById(R.id.button_switch_camera).setVisibility(View.GONE);
+			//findViewById(R.id.button_switch_camera).setVisibility(View.GONE);
+			findViewById(R.id.button_switch_camera).setEnabled(true);
 		} else {
 			findViewById(R.id.button_switch_camera).setEnabled(true);
 		}
@@ -929,13 +930,13 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 	}
 
 	private void setFlashButtonIcon(String flashMode) {
-		int currentDrawable = R.drawable.ic_flash_auto; // auto mode is the default
+		int currentDrawable = R.drawable.ic_image_flash_auto; // auto mode is the default
 		if (Camera.Parameters.FLASH_MODE_OFF.equals(flashMode)) {
-			currentDrawable = R.drawable.ic_flash_off;
+			currentDrawable = R.drawable.ic_image_flash_off;
 		} else if (Camera.Parameters.FLASH_MODE_ON.equals(flashMode)) {
-			currentDrawable = R.drawable.ic_flash_on;
+			currentDrawable = R.drawable.ic_image_flash_on;
 		} else if (Camera.Parameters.FLASH_MODE_RED_EYE.equals(flashMode)) {
-			currentDrawable = R.drawable.ic_flash_red_eye;
+			currentDrawable = R.drawable.ic_image_flash_redeye;
 		}
 
 		Resources res = getResources();
@@ -1110,7 +1111,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 	private void animateButtonRotation(Resources res, int animation, int button, int icon, int previousRotation) {
 		CenteredImageTextButton imageButton = (CenteredImageTextButton) findViewById(button);
 		Bitmap currentBitmap = BitmapFactory.decodeResource(res, icon);
-		if (currentBitmap == null) {
+		if (currentBitmap == null) { // the take picture icon is an xml drawable - it must be loaded as such
 			Drawable bitmapDrawable = res.getDrawable(icon);
 			if (bitmapDrawable instanceof BitmapDrawable) {
 				currentBitmap = ((BitmapDrawable) bitmapDrawable).getBitmap();
@@ -1189,7 +1190,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 			}
 
 			if (findViewById(R.id.button_switch_camera).getVisibility() == View.VISIBLE) {
-				animateButtonRotation(res, animation, R.id.button_switch_camera, R.drawable.ic_switch_camera,
+				animateButtonRotation(res, animation, R.id.button_switch_camera, R.drawable.ic_image_switch_camera,
 						mIconRotation);
 			}
 
