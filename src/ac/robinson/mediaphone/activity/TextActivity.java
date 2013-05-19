@@ -137,6 +137,14 @@ public class TextActivity extends MediaPhoneActivity {
 			final Editable mediaText = mEditText.getText();
 			if (!TextUtils.isEmpty(mediaText)) {
 				if (mHasEditedMedia) {
+
+					// update the text duration if not user-set (note negative value)
+					if (textMediaItem.getDurationMilliseconds() <= 0) {
+						textMediaItem.setDurationMilliseconds(-MediaItem.getTextDurationMilliseconds(mediaText
+								.toString()));
+						MediaManager.updateMedia(getContentResolver(), textMediaItem);
+					}
+
 					Runnable textUpdateRunnable = new Runnable() {
 						@Override
 						public void run() {

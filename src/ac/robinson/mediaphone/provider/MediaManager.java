@@ -252,6 +252,28 @@ public class MediaManager {
 	}
 
 	/**
+	 * Get the number of frames that link to a specific media item.
+	 * 
+	 * @param contentResolver
+	 * @param mediaId
+	 * @return
+	 */
+	public static int countLinkedParentIdsByMediaId(ContentResolver contentResolver, String mediaId) {
+		final String[] arguments1 = mArguments1;
+		arguments1[0] = mediaId;
+		Cursor c = null;
+		try {
+			c = contentResolver.query(MediaItem.CONTENT_URI_LINK, MediaItem.PROJECTION_PARENT_ID,
+					mMediaInternalIdNotDeletedSelection, arguments1, null);
+			return c.getCount();
+		} finally {
+			if (c != null) {
+				c.close();
+			}
+		}
+	}
+
+	/**
 	 * Get all media items that are linked to a specific frame. Note: *only* includes links; not normal items
 	 * 
 	 * @param contentResolver

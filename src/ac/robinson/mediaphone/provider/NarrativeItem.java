@@ -194,6 +194,95 @@ public class NarrativeItem implements BaseColumns {
 		return exportedContent;
 	}
 
+	public ArrayList<PlaybackMediaHolder> getPlaybackContent(ContentResolver contentResolver) {
+
+		ArrayList<PlaybackMediaHolder> narrativeContent = new ArrayList<PlaybackMediaHolder>();
+		HashMap<String, Integer> longRunningAudioCounts = new HashMap<String, Integer>(); // so we can adjust durations
+
+		int narrativeTime = 0;
+
+		ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, mInternalId);
+		for (FrameItem frame : narrativeFrames) {
+			final String frameId = frame.getInternalId();
+			ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, frameId);
+
+			int frameDuration = 0;
+
+			// first we need to deal with durations; specifically audio - it's far more complex to play than images/text
+			// for images and text we don't actually treat frame spanning media any differently - our database structure
+			// means that they appear as normal media items in their linked frames, so we just play regardless
+			boolean hasSpanningAudio = false;
+			for (MediaItem media : frameComponents) {
+				final int mediaType = media.getType();
+				final int mediaDuration = media.getDurationMilliseconds();
+				if (mediaType == MediaPhoneProvider.TYPE_AUDIO) {
+					final String mediaPath = media.getFile().getAbsolutePath();
+					if (media.getSpanFrames()) {
+						hasSpanningAudio = true;
+						if (frameId.equals(media.getParentId())) {
+							// this is the actual parent frame of a long-running item - count how many items link here
+							final int linkedItemCount = MediaManager.countLinkedParentIdsByMediaId(contentResolver,
+									media.getInternalId()) + 1; // +1 to count this frame as well
+							longRunningAudioCounts.put(mediaPath, linkedItemCount);
+							frameDuration = Math.max(mediaDuration / linkedItemCount, frameDuration);
+
+							// add this item to the playback list
+							narrativeContent.add(new PlaybackMediaHolder(frameId, mediaPath, mediaType, narrativeTime,
+									mediaDuration));
+						} else {
+							// if we've inherited this audio then no need to add to playback, just calculate duration
+							// TODO: very naive currently - should we split more evenly to account for other lengths?
+							frameDuration = Math.max(mediaDuration / longRunningAudioCounts.get(mediaPath),
+									frameDuration);
+						}
+					} else {
+						// a normal non-spanning audio item - update duration and add
+						frameDuration = Math.max(mediaDuration, frameDuration);
+						narrativeContent.add(new PlaybackMediaHolder(frameId, mediaPath, mediaType, narrativeTime,
+								mediaDuration));
+					}
+				} else {
+					// another type of media - just update frame duration from user-set media duration
+					frameDuration = Math.max(mediaDuration, frameDuration);
+
+					// note that calculated text durations are stored as negative numbers so we can keep track of what's
+					// generated and what's user-selected; we only use the value if it's greater than the minimum
+					// duration so that we can easily snap to the minimum below
+					if (mediaType == MediaPhoneProvider.TYPE_TEXT) {
+						final int textDuration = Math.abs(mediaDuration);
+						if (textDuration > MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION) {
+							frameDuration = Math.max(textDuration, frameDuration);
+						}
+					}
+				}
+			}
+
+			// set the minimum frame duration if not inherited from audio or user-requested
+			if (!hasSpanningAudio && frameDuration <= 0) {
+				frameDuration = Math.max(MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION, frameDuration);
+			}
+
+			// now deal with other media - add to the playback list with the frame's duration
+			for (MediaItem media : frameComponents) {
+				final int mediaType = media.getType();
+				switch (mediaType) {
+					case MediaPhoneProvider.TYPE_IMAGE_FRONT:
+					case MediaPhoneProvider.TYPE_IMAGE_BACK:
+					case MediaPhoneProvider.TYPE_VIDEO:
+					case MediaPhoneProvider.TYPE_TEXT:
+						narrativeContent.add(new PlaybackMediaHolder(frameId, media.getFile().getAbsolutePath(),
+								mediaType, narrativeTime, frameDuration));
+
+						break;
+				}
+			}
+
+			narrativeTime += frameDuration;
+		}
+
+		return narrativeContent;
+	}
+
 	public ContentValues getContentValues() {
 		final ContentValues values = new ContentValues();
 		values.put(INTERNAL_ID, mInternalId);

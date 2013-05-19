@@ -56,7 +56,7 @@ public class MediaItem implements BaseColumns {
 			FILE_EXTENSION, DURATION, TYPE, SPAN_FRAMES, DELETED };
 
 	public static final String[] PROJECTION_INTERNAL_ID = new String[] { INTERNAL_ID };
-	
+
 	public static final String[] PROJECTION_PARENT_ID = new String[] { PARENT_ID };
 
 	public static final String DEFAULT_SORT_ORDER = TYPE + " ASC, " + DATE_CREATED + " ASC";
@@ -205,14 +205,17 @@ public class MediaItem implements BaseColumns {
 		return mediaBitmap;
 	}
 
+	/**
+	 * Get the duration of a text string (number of words/lines * word duration in settings), or 0 if empty
+	 * 
+	 * @param textString
+	 * @return
+	 */
 	public static int getTextDurationMilliseconds(String textString) {
-		int frameDuration = MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION;
+		int frameDuration = 0;
 		if (!TextUtils.isEmpty(textString)) {
 			String[] stringLines = textString.split("[ \\n]+");
 			frameDuration = MediaPhone.PLAYBACK_EXPORT_WORD_DURATION * stringLines.length;
-			if (frameDuration < MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION) {
-				frameDuration = MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION;
-			}
 		}
 		return frameDuration;
 	}

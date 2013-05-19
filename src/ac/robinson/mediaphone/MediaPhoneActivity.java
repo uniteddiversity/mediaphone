@@ -541,6 +541,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION = Math.round(minimumFrameDuration * 1000);
 
 		// word duration
+		// TODO: currently a one-time setting - should we queue a background task to select text items with negative or
+		// zero/ duration values (i.e., not user-set) and update them to the new duration?
 		res.getValue(R.attr.default_word_duration, resourceValue, true);
 		float wordDuration;
 		try {
