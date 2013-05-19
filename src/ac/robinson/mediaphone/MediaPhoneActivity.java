@@ -1492,7 +1492,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		builder.setTitle(R.string.delete_narrative_confirmation);
 		builder.setMessage(R.string.delete_narrative_hint);
 		builder.setIcon(android.R.drawable.ic_dialog_alert);
-		builder.setNegativeButton(android.R.string.cancel, null);
+		builder.setNegativeButton(R.string.button_cancel, null);
 		builder.setPositiveButton(R.string.button_delete, new DialogInterface.OnClickListener() {
 			@Override
 			public void onClick(DialogInterface dialog, int whichButton) {
@@ -1505,7 +1505,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				builder.setMessage(getResources().getQuantityString(R.plurals.delete_narrative_second_hint,
 						numFramesDeleted, numFramesDeleted));
 				builder.setIcon(android.R.drawable.ic_dialog_alert);
-				builder.setNegativeButton(android.R.string.cancel, null);
+				builder.setNegativeButton(R.string.button_cancel, null);
 				builder.setPositiveButton(R.string.button_delete, new DialogInterface.OnClickListener() {
 					@Override
 					public void onClick(DialogInterface dialog, int whichButton) {
@@ -1547,7 +1547,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		builder.setTitle(R.string.export_narrative_title);
 		// builder.setMessage(R.string.send_narrative_hint); //breaks dialog
 		builder.setIcon(android.R.drawable.ic_dialog_info);
-		builder.setNegativeButton(android.R.string.cancel, null);
+		builder.setNegativeButton(R.string.button_cancel, null);
 		builder.setItems(items, new DialogInterface.OnClickListener() {
 			@Override
 			public void onClick(DialogInterface dialog, int item) {
@@ -1615,10 +1615,10 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 
 							if (incompatibleAudio) {
 								AlertDialog.Builder builder = new AlertDialog.Builder(MediaPhoneActivity.this);
-								builder.setTitle(android.R.string.dialog_alert_title);
-								builder.setMessage(R.string.mov_export_mov_incompatible);
+								builder.setTitle(R.string.mov_export_mov_incompatible_title);
+								builder.setMessage(R.string.mov_export_mov_incompatible_summary);
 								builder.setIcon(android.R.drawable.ic_dialog_alert);
-								builder.setNegativeButton(android.R.string.cancel, null);
+								builder.setNegativeButton(R.string.button_cancel, null);
 								builder.setPositiveButton(R.string.button_continue,
 										new DialogInterface.OnClickListener() {
 											@Override
@@ -1865,7 +1865,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			builder.setTitle(R.string.make_template_confirmation);
 			builder.setMessage(R.string.make_template_hint);
 			builder.setIcon(android.R.drawable.ic_dialog_info);
-			builder.setPositiveButton(android.R.string.ok, null);
+			builder.setPositiveButton(R.string.button_ok, null);
 			AlertDialog alert = builder.create();
 			alert.show();
 		}

@@ -625,7 +625,7 @@ public class NarrativeBrowserActivity extends BrowserActivity {
 			AlertDialog.Builder builder = new AlertDialog.Builder(NarrativeBrowserActivity.this);
 			builder.setTitle(R.string.title_add);
 			builder.setIcon(android.R.drawable.ic_dialog_info);
-			builder.setNegativeButton(android.R.string.cancel, null);
+			builder.setNegativeButton(R.string.button_cancel, null);
 			builder.setItems(items, new DialogInterface.OnClickListener() {
 				@Override
 				public void onClick(DialogInterface dialog, int item) {

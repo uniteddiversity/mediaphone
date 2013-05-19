@@ -379,7 +379,7 @@ public class TemplateBrowserActivity extends BrowserActivity {
 				builder.setTitle(R.string.template_actions);
 				// builder.setMessage(R.string.edit_template_hint);
 				builder.setIcon(android.R.drawable.ic_dialog_info);
-				builder.setNegativeButton(android.R.string.cancel, null);
+				builder.setNegativeButton(R.string.button_cancel, null);
 				builder.setItems(items, new DialogInterface.OnClickListener() {
 					@Override
 					public void onClick(DialogInterface dialog, int item) {
@@ -392,7 +392,7 @@ public class TemplateBrowserActivity extends BrowserActivity {
 								builder.setTitle(R.string.delete_template_confirmation);
 								builder.setMessage(R.string.delete_template_hint);
 								builder.setIcon(android.R.drawable.ic_dialog_alert);
-								builder.setNegativeButton(android.R.string.cancel, null);
+								builder.setNegativeButton(R.string.button_cancel, null);
 								builder.setPositiveButton(R.string.button_delete,
 										new DialogInterface.OnClickListener() {
 											@Override
