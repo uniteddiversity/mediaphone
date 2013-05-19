@@ -635,8 +635,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 		int autofocusInterval = res.getInteger(R.integer.camera_autofocus_interval);
 
 		if (!mCameraConfiguration.hasFrontCamera || mCameraConfiguration.numberOfCameras <= 1) {
-			//findViewById(R.id.button_switch_camera).setVisibility(View.GONE);
-			findViewById(R.id.button_switch_camera).setEnabled(true);
+			findViewById(R.id.button_switch_camera).setVisibility(View.GONE);
 		} else {
 			findViewById(R.id.button_switch_camera).setEnabled(true);
 		}
