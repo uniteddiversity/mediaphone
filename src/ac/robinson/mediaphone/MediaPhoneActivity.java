@@ -1325,7 +1325,6 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 	 * @param mediaItem
 	 * @return The new state of the media item (true for frame spanning; false otherwise)
 	 */
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	protected boolean toggleFrameSpanningMedia(MediaItem mediaItem) {
 
 		final boolean isFrameSpanning = mediaItem.getSpanFrames();
@@ -1428,10 +1427,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			}
 		});
 
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-			// state has changed, so disabled menu items may be enabled, and vice-versa
-			invalidateOptionsMenu();
-		}
+		// state has changed, so disabled menu items may be enabled, and vice-versa
+		UIUtilities.refreshActionBar(MediaPhoneActivity.this);
 
 		// finally, return the new media spanning state
 		mediaItem.setSpanFrames(!isFrameSpanning);
