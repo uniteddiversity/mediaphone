@@ -183,7 +183,7 @@ public class FrameAdapter extends CursorAdapter implements FilterQueryProvider {
 
 		final CrossFadeDrawable transition = new CrossFadeDrawable(mDefaultIconBitmap, null);
 		transition.setCallback(view);
-		transition.setCrossFadeEnabled(true);
+		transition.setCrossFadeEnabled(false);
 		holder.transition = transition;
 
 		return view;

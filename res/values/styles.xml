@@ -7,6 +7,11 @@
 
     <style name="default_dark_theme" parent="@android:Theme.Black.NoTitleBar" />
 
+    <style name="fullscreen_theme" parent="android:Theme.NoTitleBar">
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowBackground">@null</item>
+    </style>
+
     <style name="default_dialog" parent="@android:Theme.Dialog" />
 
     <style name="default_vertical_linear_layout">

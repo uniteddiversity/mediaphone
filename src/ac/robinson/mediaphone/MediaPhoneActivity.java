@@ -60,7 +60,6 @@ import ac.robinson.util.UIUtilities;
 import ac.robinson.util.ViewServer;
 import ac.robinson.view.CenteredImageTextButton;
 import ac.robinson.view.CrossFadeDrawable;
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -75,6 +74,8 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.drawable.AnimationDrawable;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -1486,7 +1487,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		});
 	}
 
-	protected void deleteNarrativeDialog(final String frameInternalId) {
+	protected void deleteNarrativeDialog(final String narrativeInternalId) {
 		AlertDialog.Builder builder = new AlertDialog.Builder(MediaPhoneActivity.this);
 		builder.setTitle(R.string.delete_narrative_confirmation);
 		builder.setMessage(R.string.delete_narrative_hint);
@@ -1495,10 +1496,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		builder.setPositiveButton(R.string.button_delete, new DialogInterface.OnClickListener() {
 			@Override
 			public void onClick(DialogInterface dialog, int whichButton) {
-				ContentResolver contentResolver = getContentResolver();
-				FrameItem currentFrame = FramesManager.findFrameByInternalId(contentResolver, frameInternalId);
-				final String narrativeId = currentFrame.getParentId();
-				int numFramesDeleted = FramesManager.countFramesByParentId(contentResolver, narrativeId);
+				int numFramesDeleted = FramesManager.countFramesByParentId(getContentResolver(), narrativeInternalId);
 				AlertDialog.Builder builder = new AlertDialog.Builder(MediaPhoneActivity.this);
 				builder.setTitle(R.string.delete_narrative_second_confirmation);
 				builder.setMessage(getResources().getQuantityString(R.plurals.delete_narrative_second_hint,
@@ -1510,7 +1508,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					public void onClick(DialogInterface dialog, int whichButton) {
 						ContentResolver contentResolver = getContentResolver();
 						NarrativeItem narrativeToDelete = NarrativesManager.findNarrativeByInternalId(contentResolver,
-								narrativeId);
+								narrativeInternalId);
 						narrativeToDelete.setDeleted(true);
 						NarrativesManager.updateNarrative(contentResolver, narrativeToDelete);
 						UIUtilities.showToast(MediaPhoneActivity.this, R.string.delete_narrative_succeeded);
@@ -2439,14 +2437,25 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		};
 	}
 
+	public static enum FadeType {
+		NONE, FADEIN // CROSSFADE - disabled because of memory issues (holding previous and next bitmaps in memory)
+	}
+
 	protected void loadScreenSizedImageInBackground(ImageView imageView, String imagePath,
-			boolean forceReloadSameImage, boolean fadeIn) {
+			boolean forceReloadSameImage, FadeType fadeType) {
 		// forceReloadSameImage is for, e.g., reloading image after rotation (normally this extra load would be ignored)
 		if (cancelExistingTask(imagePath, imageView, forceReloadSameImage)) {
-			final BitmapLoaderTask task = new BitmapLoaderTask(imageView, fadeIn);
+			final BitmapLoaderTask task = new BitmapLoaderTask(imageView, fadeType);
 			final BitmapLoaderHolder loaderTaskHolder = new BitmapLoaderHolder(task);
 			imageView.setTag(loaderTaskHolder);
 			task.execute(imagePath); // TODO: deal with post-4.0 single thread AsyncTask - use executeOnExecutor
+		}
+	}
+
+	protected void cancelLoadingScreenSizedImageInBackground(ImageView imageView) {
+		final BitmapLoaderTask bitmapLoaderTask = getBitmapLoaderTask(imageView);
+		if (bitmapLoaderTask != null) {
+			bitmapLoaderTask.cancel(true);
 		}
 	}
 
@@ -2476,26 +2485,33 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 
 	private class BitmapLoaderTask extends AsyncTask<String, Void, Bitmap> {
 		private final WeakReference<ImageView> mImageView; // WeakReference to allow garbage collection
-		private boolean mFadeIn;
+		private FadeType mFadeType;
 
 		public String mImagePath;
 
-		public BitmapLoaderTask(ImageView imageView, boolean fadeIn) {
+		public BitmapLoaderTask(ImageView imageView, FadeType fadeType) {
 			mImageView = new WeakReference<ImageView>(imageView);
-			mFadeIn = fadeIn;
+			mFadeType = fadeType;
 		}
 
 		@Override
 		protected Bitmap doInBackground(String... params) {
 			mImagePath = params[0];
 			Point screenSize = UIUtilities.getScreenSize(getWindowManager());
-			return BitmapUtilities.loadAndCreateScaledBitmap(mImagePath, screenSize.x, screenSize.y,
-					BitmapUtilities.ScalingLogic.FIT, true);
+			try {
+				return BitmapUtilities.loadAndCreateScaledBitmap(mImagePath, screenSize.x, screenSize.y,
+						BitmapUtilities.ScalingLogic.FIT, true);
+			} catch (Throwable t) {
+				return null; // out of memory...
+			}
 		}
 
 		@Override
 		protected void onPostExecute(Bitmap bitmap) {
 			if (isCancelled()) {
+				if (bitmap != null) {
+					bitmap.recycle();
+				}
 				bitmap = null;
 			}
 
@@ -2503,15 +2519,29 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 				final ImageView imageView = mImageView.get();
 				final BitmapLoaderTask bitmapLoaderTask = getBitmapLoaderTask(imageView);
 				if (this == bitmapLoaderTask && imageView != null) {
-					if (mFadeIn) {
+					if (mFadeType == FadeType.NONE) {
+						imageView.setImageBitmap(bitmap);
+					} else {
+						// Drawable currentDrawable = imageView.getDrawable();
+						// final Bitmap initialState;
+						// if (currentDrawable instanceof BitmapDrawable) {
+						// initialState = ((BitmapDrawable) currentDrawable).getBitmap();
+						// } else if (currentDrawable instanceof CrossFadeDrawable) {
+						// initialState = ((CrossFadeDrawable) currentDrawable).getEnd();
+						// } else {
+						// initialState = Bitmap.createBitmap(1, 1,
+						// ImageCacheUtilities.mBitmapFactoryOptions.inPreferredConfig);
+						// }
 						final CrossFadeDrawable transition = new CrossFadeDrawable(Bitmap.createBitmap(1, 1,
-								ImageCacheUtilities.mBitmapFactoryOptions.inPreferredConfig), bitmap);
+								Bitmap.Config.ALPHA_8), bitmap);
 						transition.setCallback(imageView);
-						transition.setCrossFadeEnabled(true);
+						// if (mFadeType == FadeType.CROSSFADE) {
+						// transition.setCrossFadeEnabled(true);
+						// } else {
+						// transition.setCrossFadeEnabled(false);
+						// }
 						transition.startTransition(MediaPhone.ANIMATION_FADE_TRANSITION_DURATION);
 						imageView.setImageDrawable(transition);
-					} else {
-						imageView.setImageBitmap(bitmap);
 					}
 				}
 			}

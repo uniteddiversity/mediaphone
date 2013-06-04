@@ -613,7 +613,7 @@ public class NarrativeBrowserActivity extends BrowserActivity {
 	}
 
 	private void playNarrative(String startFrameId) {
-		final Intent framePlayerIntent = new Intent(NarrativeBrowserActivity.this, NarrativePlayerActivity.class);
+		final Intent framePlayerIntent = new Intent(NarrativeBrowserActivity.this, PlaybackActivity.class);
 		framePlayerIntent.putExtra(getString(R.string.extra_internal_id), startFrameId);
 		startActivityForResult(framePlayerIntent, MediaPhone.R_id_intent_narrative_player);
 	}

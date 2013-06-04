@@ -920,7 +920,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 						mMediaItemInternalId);
 				if (imageMediaItem != null) {
 					loadScreenSizedImageInBackground((ImageView) findViewById(R.id.camera_result), imageMediaItem
-							.getFile().getAbsolutePath(), true, true); // reload the image
+							.getFile().getAbsolutePath(), true, MediaPhoneActivity.FadeType.FADEIN); // reload image
 				}
 				findViewById(R.id.button_rotate_clockwise).setEnabled(true);
 				findViewById(R.id.button_rotate_anticlockwise).setEnabled(true);

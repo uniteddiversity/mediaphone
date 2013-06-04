@@ -233,7 +233,7 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 
 			case R.id.menu_play_narrative:
 				if (MediaManager.countMediaByParentId(getContentResolver(), mFrameInternalId) > 0) {
-					final Intent framePlayerIntent = new Intent(FrameEditorActivity.this, NarrativePlayerActivity.class);
+					final Intent framePlayerIntent = new Intent(FrameEditorActivity.this, PlaybackActivity.class);
 					framePlayerIntent.putExtra(getString(R.string.extra_internal_id), mFrameInternalId);
 					startActivityForResult(framePlayerIntent, MediaPhone.R_id_intent_narrative_player);
 				} else {
@@ -268,7 +268,10 @@ public class FrameEditorActivity extends MediaPhoneActivity {
 				return true;
 
 			case R.id.menu_delete_narrative:
-				deleteNarrativeDialog(mFrameInternalId);
+				FrameItem currentFrame = FramesManager.findFrameByInternalId(getContentResolver(), mFrameInternalId);
+				if (currentFrame != null) {
+					deleteNarrativeDialog(currentFrame.getParentId());
+				}
 				return true;
 
 			case R.id.menu_back_without_editing:

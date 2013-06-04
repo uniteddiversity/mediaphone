@@ -22,6 +22,7 @@ package ac.robinson.mediaphone.provider;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 import ac.robinson.mediaphone.MediaPhone;
 import ac.robinson.mediautilities.FrameMediaContainer;
@@ -62,7 +63,7 @@ public class NarrativeItem implements BaseColumns {
 
 	public static final String SELECTION_NOT_DELETED = DELETED + "=0";
 
-	public static final String DEFAULT_SORT_ORDER = DATE_CREATED + " DESC";
+	public static final String DEFAULT_SORT_ORDER = SEQUENCE_ID + " DESC"; // seq id, not date, in case date is wrong
 
 	private String mInternalId;
 	private long mCreationDate;
@@ -194,24 +195,52 @@ public class NarrativeItem implements BaseColumns {
 		return exportedContent;
 	}
 
-	public ArrayList<PlaybackMediaHolder> getPlaybackContent(ContentResolver contentResolver) {
+	/**
+	 * Parse this narrative's content, returning a list of timed media items. The given PlaybackNarrativeDescriptor
+	 * contains options for parsing, and is returned with important initialisation values (start time, for example).
+	 * 
+	 * Note: start time could easily be calculated from the narrative descriptor's mTimeToFrameMap, but as we're looping
+	 * through every frame anyway it's more efficient to calculate it here.
+	 * 
+	 * @param contentResolver
+	 * @param startingFrame
+	 * @param narrativeDescriptor
+	 * @return
+	 */
+	public ArrayList<PlaybackMediaHolder> getPlaybackContent(ContentResolver contentResolver, String startingFrame,
+			PlaybackNarrativeDescriptor narrativeDescriptor) {
 
-		ArrayList<PlaybackMediaHolder> narrativeContent = new ArrayList<PlaybackMediaHolder>();
-		HashMap<String, Integer> longRunningAudioCounts = new HashMap<String, Integer>(); // so we can adjust durations
+		final ArrayList<PlaybackMediaHolder> narrativeContent = new ArrayList<PlaybackMediaHolder>();
+		final HashMap<String, Integer> longRunningAudioCounts = new HashMap<String, Integer>(); // to adjust durations
+		final LinkedHashMap<Integer, String> mTimeToFrameMap = narrativeDescriptor.mTimeToFrameMap; // to track frames
 
 		int narrativeTime = 0;
+		int narrativeDuration = 0;
+		boolean frameFound = startingFrame == null ? true : false;
 
 		ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, mInternalId);
+		int currentFrame = 0;
+		int lastFrame = narrativeFrames.size() - 1;
 		for (FrameItem frame : narrativeFrames) {
 			final String frameId = frame.getInternalId();
+			mTimeToFrameMap.put(narrativeDuration, frameId); // store the frame's start time
 			ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, frameId);
 
 			int frameDuration = 0;
+
+			// return the index of the first item that applies to this frame
+			if (!frameFound) {
+				if (frameId.equals(startingFrame)) {
+					narrativeDescriptor.mNarrativeStartTime = narrativeTime;
+					frameFound = true;
+				}
+			}
 
 			// first we need to deal with durations; specifically audio - it's far more complex to play than images/text
 			// for images and text we don't actually treat frame spanning media any differently - our database structure
 			// means that they appear as normal media items in their linked frames, so we just play regardless
 			boolean hasSpanningAudio = false;
+			int audioItemsAdded = 0;
 			for (MediaItem media : frameComponents) {
 				final int mediaType = media.getType();
 				final int mediaDuration = media.getDurationMilliseconds();
@@ -227,8 +256,13 @@ public class NarrativeItem implements BaseColumns {
 							frameDuration = Math.max(mediaDuration / linkedItemCount, frameDuration);
 
 							// add this item to the playback list
+							final int audioEndTime = narrativeTime + mediaDuration;
 							narrativeContent.add(new PlaybackMediaHolder(frameId, mediaPath, mediaType, narrativeTime,
-									mediaDuration));
+									audioEndTime, 0));
+							audioItemsAdded += 1;
+
+							// because of rounding errors, we could be wrong in the narrative duration here - correct
+							narrativeDuration = Math.max(narrativeDuration, audioEndTime);
 						} else {
 							// if we've inherited this audio then no need to add to playback, just calculate duration
 							// TODO: very naive currently - should we split more evenly to account for other lengths?
@@ -239,7 +273,8 @@ public class NarrativeItem implements BaseColumns {
 						// a normal non-spanning audio item - update duration and add
 						frameDuration = Math.max(mediaDuration, frameDuration);
 						narrativeContent.add(new PlaybackMediaHolder(frameId, mediaPath, mediaType, narrativeTime,
-								mediaDuration));
+								narrativeTime + mediaDuration, 0));
+						audioItemsAdded += 1;
 					}
 				} else {
 					// another type of media - just update frame duration from user-set media duration
@@ -262,24 +297,65 @@ public class NarrativeItem implements BaseColumns {
 				frameDuration = Math.max(MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION, frameDuration);
 			}
 
-			// now deal with other media - add to the playback list with the frame's duration
+			// now deal with images (only one item of this type per frame)
+			// note that we adjust image timings so that their crossfade ends when the next image starts - this requires
+			// shifting images earlier in the playback queue so that they can be set up in time
+			// TODO: spread the crossfade over the beginning and the end of the image so that timings are more accurate?
+			final int mediaEndTime = narrativeTime + frameDuration;
+			narrativeDuration = Math.max(narrativeDuration, mediaEndTime);
 			for (MediaItem media : frameComponents) {
 				final int mediaType = media.getType();
-				switch (mediaType) {
-					case MediaPhoneProvider.TYPE_IMAGE_FRONT:
-					case MediaPhoneProvider.TYPE_IMAGE_BACK:
-					case MediaPhoneProvider.TYPE_VIDEO:
-					case MediaPhoneProvider.TYPE_TEXT:
+				if (mediaType == MediaPhoneProvider.TYPE_IMAGE_FRONT || mediaType == MediaPhoneProvider.TYPE_IMAGE_BACK
+						|| mediaType == MediaPhoneProvider.TYPE_VIDEO) {
+					if (narrativeDescriptor.mNarrativeImageAdjustment > 0) {
+						narrativeContent.add(narrativeContent.size() - audioItemsAdded, new PlaybackMediaHolder(
+								frameId, media.getFile().getAbsolutePath(), mediaType, narrativeTime, mediaEndTime,
+								narrativeDescriptor.mNarrativeImageAdjustment));
+					} else {
 						narrativeContent.add(new PlaybackMediaHolder(frameId, media.getFile().getAbsolutePath(),
-								mediaType, narrativeTime, frameDuration));
+								mediaType, narrativeTime, mediaEndTime, 0));
+					}
+					break;
+				}
+			}
 
-						break;
+			// finally, add the text (only one item of this type per frame)
+			// if this is the last item we add 1ms to the item's duration so it stays visible after playback completes
+			// TODO: check whether this 1ms breaks movie creation (could do as an adjustment instead if so)
+			boolean lastFrameAdjustments = currentFrame == lastFrame
+					&& narrativeDescriptor.mNarrativeImageAdjustment > 0;
+			for (MediaItem media : frameComponents) {
+				if (media.getType() == MediaPhoneProvider.TYPE_TEXT) {
+					narrativeContent.add(new PlaybackMediaHolder(frameId, media.getFile().getAbsolutePath(),
+							MediaPhoneProvider.TYPE_TEXT, narrativeTime, mediaEndTime + (lastFrameAdjustments ? 1 : 0),
+							0));
+					break;
+				}
+			}
+
+			// if there are image items present for the last frame we add duplicates to cover the length of the playback
+			// adjustment so that images are shown right to the end of the narrative - this is a hack, but easier (and
+			// more efficient) than checking in playback whether we're at the last image
+			// we also add 1ms to the item's duration so that it stays visible after playback completes
+			// TODO: check whether this 1ms breaks movie creation (could do as an adjustment instead if so)
+			if (lastFrameAdjustments) {
+				for (MediaItem media : frameComponents) {
+					final int mediaType = media.getType();
+					if (mediaType == MediaPhoneProvider.TYPE_IMAGE_FRONT
+							|| mediaType == MediaPhoneProvider.TYPE_IMAGE_BACK
+							|| mediaType == MediaPhoneProvider.TYPE_VIDEO) {
+						narrativeContent.add(new PlaybackMediaHolder(frameId, media.getFile().getAbsolutePath(),
+								mediaType, mediaEndTime - narrativeDescriptor.mNarrativeImageAdjustment,
+								mediaEndTime + 1, 0));
+					}
 				}
 			}
 
 			narrativeTime += frameDuration;
+			currentFrame += 1;
 		}
 
+		narrativeDescriptor.mNarrativeDuration = narrativeDuration;
 		return narrativeContent;
 	}
 

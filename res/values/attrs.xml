@@ -173,14 +173,16 @@
     <!-- layout related -->
     <dimen name="button_padding">5dp</dimen>
     <dimen name="navigation_button_height">60dp</dimen>
-    <dimen name="media_controller_height">100dp</dimen>
+    <dimen name="media_controller_height">90dp</dimen> <!-- TODO: remove after moving to PlaybackController fully -->
     <dimen name="add_narrative_button_size">40dp</dimen>
     <dimen name="add_narrative_button_padding">4dp</dimen>
     <dimen name="add_narrative_button_text_size">20sp</dimen>
     <dimen name="button_text">22sp</dimen>
     <dimen name="edit_text">22sp</dimen>
     <dimen name="audio_status_text">32sp</dimen>
-    <dimen name="playback_text">32sp</dimen>
+    <dimen name="playback_maximum_text_size">32sp</dimen>
+    <dimen name="playback_minimum_text_size">12sp</dimen> <!-- from http://developer.android.com/design/style/typography.html -->
+
 
     <!-- percentage of the frame editor image button's height, so the image doesn't overlap the edge of the button -->
     <item name="image_button_fill_percentage" format="float" type="attr">0.9</item>
