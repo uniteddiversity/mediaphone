@@ -105,6 +105,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	private int mPlaybackPositionMilliseconds = 0; // the current playback time, in milliseconds
 	private int mPlaybackDurationMilliseconds = 0; // the duration of the narrative, in milliseconds
 
+	private boolean mFinishedLoadingImages = false; // for tracking image loads, particularly during very short frames
 	private String mCurrentPlaybackImagePath = null; // cached path for avoiding reloads where possible
 	private String mBackgroundPlaybackImagePath = null; // cached next image path for avoiding reloads where possible
 	private Bitmap mAudioPictureBitmap = null; // cached audio icon for avoiding reloads where possible
@@ -113,7 +114,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 	private boolean mPlaying = true; // whether we're currently playing or paused
 	private boolean mWasPlaying = false; // for saving the playback state while performing other actions
-	private boolean mHasRotated = false; // whether we must reload/resize media as the screen has been rotated
+	private boolean mStateChanged = false; // whether we must reload/resize as the screen has rotated or state changed
 
 	// UI elements for displaying, caching and animating media
 	private SendToBackRelativeLayout mPlaybackRoot;
@@ -148,12 +149,13 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		mCurrentPlaybackImagePath = null;
 		mBackgroundPlaybackImagePath = null;
 		mAudioPictureBitmap = null;
+		mFinishedLoadingImages = false;
 
 		// update the cached screen size
 		mScreenSize = UIUtilities.getScreenSize(getWindowManager());
 
 		// reload media - no playback delay so we can load immediately
-		mHasRotated = true;
+		mStateChanged = true;
 		mMediaAdvanceHandler.removeCallbacks(mMediaAdvanceRunnable);
 		mMediaAdvanceHandler.post(mMediaAdvanceRunnable);
 	}
@@ -414,9 +416,11 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		@Override
 		public void run() {
 			if (!mPlaybackController.isDragging()) {
-				if (mPlaying || mHasRotated) {
-					mPlaybackPositionMilliseconds += Math.min(PLAYBACK_UPDATE_INTERVAL_MILLIS,
-							mPlaybackDurationMilliseconds - mPlaybackPositionMilliseconds);
+				if (mPlaying || mStateChanged) {
+					if (mPlaying) {
+						mPlaybackPositionMilliseconds += Math.min(PLAYBACK_UPDATE_INTERVAL_MILLIS,
+								mPlaybackDurationMilliseconds - mPlaybackPositionMilliseconds);
+					}
 					refreshPlayback();
 				}
 			} else {
@@ -454,9 +458,9 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	/**
 	 * Schedules a load of the image in mCurrentPlaybackImagePath, cancelling any previously scheduled load requests
 	 */
-	private void delayedImageLoad() {
+	private void delayedImageLoad(int delayMs) {
 		mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
-		mImageLoadHandler.postDelayed(mImageLoadRunnable, PLAYBACK_UPDATE_INTERVAL_MILLIS);
+		mImageLoadHandler.postDelayed(mImageLoadRunnable, delayMs);
 	}
 
 	/**
@@ -510,11 +514,14 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				// the current and previous cached images are highly likely to be wrong - reload
 				mCurrentPlaybackImagePath = null;
 				mBackgroundPlaybackImagePath = null;
+				mFinishedLoadingImages = false;
 
 				// like in seekTo, this is inefficient, but probably not worth working around
 				mNarrativeContentIndex = 0;
 
 				// schedule playback to continue
+				playPreparedAudio();
+				mStateChanged = true; // we've changed state - forces a reload when playback is paused
 				delayedPlaybackAdvance();
 			}
 		});
@@ -602,7 +609,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 		// check whether we need to reload any existing content (due to screen rotation); if not, exit
 		if (!itemsRemoved && !itemsAdded) {
-			boolean mustReload = mHasRotated;
+			boolean mustReload = mStateChanged;
 			if (!mustReload) {
 				// media items that we might have missed (started within the time period) need to be loaded
 				for (PlaybackMediaHolder holder : mCurrentPlaybackItems) {
@@ -619,7 +626,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			}
 		}
 
-		mHasRotated = false; // if we get here we're reloading, so reset rotation tracking
+		mStateChanged = false; // if we get here we're reloading, so reset rotation tracking
 
 		// load images and audio before text so we can set up their display/playback at the right times
 		// TODO: there are potential memory issues here - setting an ImageView's drawable doesn't reliably clear the
@@ -627,8 +634,6 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		// (if so, need to beware of recycling the audio image bitmap, or just check for isRecycled() on load)
 		PlaybackMediaHolder textItem = null;
 		boolean hasImage = false;
-		boolean finishedImages = false;
-		boolean firstLoad = false;
 		for (PlaybackMediaHolder holder : mCurrentPlaybackItems) {
 			// no need to check end time - we've removed invalid items already
 			boolean itemAppliesNow = holder.getStartTime(true) <= mPlaybackPositionMilliseconds;
@@ -641,10 +646,10 @@ public class PlaybackActivity extends MediaPhoneActivity {
 					hasImage |= itemAppliesNow;
 					if (mPlaybackController.isDragging()) {
 
+						// while dragging we need to trade off good UI performance against memory usage (could
+						// overflow limit if we just background loaded everything) - instead, load a downscaled
+						// version on the UI thread then update to show the full resolution version after a timeout
 						if (itemAppliesNow && !holder.mMediaPath.equals(mCurrentPlaybackImagePath)) {
-							// while dragging we need to tradeoff good UI performance against memory usage (could
-							// overflow limit if we just background loaded everything) - instead, load a downscaled
-							// version on the UI thread then update to show the full resolution version after a timeout
 							cancelLoadingScreenSizedImageInBackground(mPlaybackImage);
 							Bitmap scaledBitmap = null;
 							try {
@@ -657,62 +662,43 @@ public class PlaybackActivity extends MediaPhoneActivity {
 							mCurrentPlaybackImagePath = holder.mMediaPath;
 							mBackgroundPlaybackImagePath = null; // any previously cached image will now be wrong
 							mBackgroundPlaybackImage.setImageDrawable(null);
-							delayedImageLoad();
+							delayedImageLoad(PLAYBACK_UPDATE_INTERVAL_MILLIS);
 						}
 
 					} else if (itemAppliesNow && mCurrentPlaybackImagePath == null) {
 
-						// for the first load, it's a better UI experience if it happens in situ (~250ms)
-						Bitmap scaledBitmap = null;
-						try {
-							scaledBitmap = BitmapUtilities.loadAndCreateScaledBitmap(holder.mMediaPath, mScreenSize.x,
-									mScreenSize.y, BitmapUtilities.ScalingLogic.FIT, true);
-						} catch (Throwable t) {
-							// out of memory...
+						// if an item applies now and there's nothing stored in the current path it's the first image
+						// - for the first image, it's a better UI experience if loading happens in situ (~250ms)
+						if (holder.mMediaPath.equals(mBackgroundPlaybackImagePath)) {
+							// if the first frame wasn't an image, then we'll have already loaded it in the background
+							swapBackgroundImage();
+						} else {
+							Bitmap scaledBitmap = null;
+							try {
+								scaledBitmap = BitmapUtilities.loadAndCreateScaledBitmap(holder.mMediaPath,
+										mScreenSize.x, mScreenSize.y, BitmapUtilities.ScalingLogic.FIT, true);
+							} catch (Throwable t) { // out of memory...
+							}
+							mPlaybackImage.setImageBitmap(scaledBitmap);
 						}
-						mPlaybackImage.setImageBitmap(scaledBitmap);
 						mCurrentPlaybackImagePath = holder.mMediaPath;
 
-						// don't want to risk another itemAppliesNow swap if multiple images apply (for instance - in
-						// the future when very short items might be allowed) - wait for next loop
-						firstLoad = true;
+					} else if (!holder.mMediaPath.equals(mCurrentPlaybackImagePath)) {
 
-					} else if (!finishedImages && !holder.mMediaPath.equals(mCurrentPlaybackImagePath)) {
-						if (!holder.mMediaPath.equals(mBackgroundPlaybackImagePath)) {
-							// preload the next image (making sure not to reload either the current or multiple nexts)
-							// did try preloading a downscaled version here while the full version was loading, but that
-							// led to out of memory errors on some devices - just load the normal version instead
+						// preload the next image (making sure not to reload either the current or multiple nexts)
+						// did try preloading a downscaled version here while the full version was loading, but that
+						// led to out of memory errors on some devices - just load the normal version instead
+						if (!mFinishedLoadingImages && !holder.mMediaPath.equals(mBackgroundPlaybackImagePath)) {
+							mImageLoadHandler.removeCallbacks(mImageLoadRunnable); // no need to load prevs any more
 							loadScreenSizedImageInBackground(mBackgroundPlaybackImage, holder.mMediaPath, true,
 									MediaPhoneActivity.FadeType.NONE);
 							mBackgroundPlaybackImagePath = holder.mMediaPath;
-							if (mCurrentPlaybackImagePath == null) {
-								// if the narrative didn't begin with an image mCurrentPlaybackImagePath will be null
-								// (because the item doesn't apply now) but we'll have loaded in the background - we set
-								// to a fake string so we don't load the same image into both foreground and background
-								mCurrentPlaybackImagePath = toString();
-							}
-							finishedImages = true;
+							mFinishedLoadingImages = true;
 
-						} else if (itemAppliesNow && !firstLoad) {
-
+						} else if (itemAppliesNow) {
 							// if necessary, swap the preloaded image to replace the current image
-							ImageView temp = mPlaybackImage;
-							mPlaybackImage = mBackgroundPlaybackImage;
-							mBackgroundPlaybackImage = temp;
-
-							// the new image should be at the back to fade between frames - use a custom layout for this
-							mPlaybackRoot.sendChildToBack(mPlaybackImage);
-							mPlaybackImage.setVisibility(View.VISIBLE);
-
-							// now fade out the old image
-							// TODO: if we've seeked, and swap from a null image before loading the background, this
-							// looks bad. Probably a non-problem...
-							mBackgroundPlaybackImage.startAnimation(mFadeOutAnimation);
-							mBackgroundPlaybackImage.setVisibility(View.GONE);
-
+							swapBackgroundImage();
 							mCurrentPlaybackImagePath = holder.mMediaPath;
-							mBackgroundPlaybackImagePath = null;
-							// mBackgroundPlaybackImage.setImageDrawable(null); // don't do this - transitions look bad
 						}
 					}
 					break;
@@ -808,8 +794,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 						try {
 							mAudioPictureBitmap = SVGParser.getSVGFromResource(getResources(), R.raw.ic_audio_playback)
 									.getBitmap(mScreenSize.x, mScreenSize.y);
-						} catch (Throwable t) {
-							// out of memory, or parse error...
+						} catch (Throwable t) { // out of memory, or parse error...
 						}
 					}
 					mCurrentPlaybackImagePath = String.valueOf(R.raw.ic_audio_playback); // now the current image
@@ -824,11 +809,49 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			}
 		}
 
-		// start any pre-cached audio players that might now be ready (for use during/after seeking)
-		playPreparedAudio();
+		// start/seek any pre-cached audio players that might now be ready
+		if (mPlaybackController.isDragging()) {
+			playPreparedAudio(); // TODO: worth considering whether audio is actually necessary for seeking...
+		}
 
 		// queue advancing the playback handler
 		delayedPlaybackAdvance();
+	}
+
+	private void swapBackgroundImage() {
+		// if the image hasn't yet loaded, it's likely we're playing a narrative with really short frames - to try to
+		// keep up with playback, cancel loading and just show a downscaled version; queuing the full-sized version
+		if (mBackgroundPlaybackImage.getTag() != null) {
+			// TODO: check that this doesn't cause problems on low-capability v14+ devices (e.g., HTC Sensation)
+			cancelLoadingScreenSizedImageInBackground(mBackgroundPlaybackImage);
+			Bitmap scaledBitmap = null;
+			try {
+				scaledBitmap = BitmapUtilities.loadAndCreateScaledBitmap(mBackgroundPlaybackImagePath, mScreenSize.x,
+						mScreenSize.y, BitmapUtilities.ScalingLogic.DOWNSCALE, true);
+			} catch (Throwable t) { // out of memory...
+			}
+			mBackgroundPlaybackImage.setImageBitmap(scaledBitmap);
+
+			// load the full-resolution image, but wait longer here just in case we're loading lots of short frames
+			delayedImageLoad(PLAYBACK_UPDATE_INTERVAL_MILLIS * 5);
+		}
+
+		ImageView temp = mPlaybackImage;
+		mPlaybackImage = mBackgroundPlaybackImage;
+		mBackgroundPlaybackImage = temp;
+
+		// the new image should be at the back to fade between frames - use a custom layout for this
+		mPlaybackRoot.sendChildToBack(mPlaybackImage);
+		mPlaybackImage.setVisibility(View.VISIBLE);
+
+		// now fade out the old image
+		// TODO: if we've seeked, and swap from a null image before loading, this looks bad; probably a non-problem...
+		mBackgroundPlaybackImage.startAnimation(mFadeOutAnimation);
+		mBackgroundPlaybackImage.setVisibility(View.GONE);
+
+		// mBackgroundPlaybackImage.setImageDrawable(null); // don't do this - transitions look bad
+		mBackgroundPlaybackImagePath = null;
+		mFinishedLoadingImages = false;
 	}
 
 	/**
@@ -937,8 +960,6 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		@Override
 		public void onCompletion(MediaPlayer mp) {
 			// at the moment we don't need to do anything here
-			// TODO: this means that we sometimes replay the last second or so of an audio item - reset here instead?
-			// (also worth considering whether audio is actually necessary for seeking)
 		}
 	};
 

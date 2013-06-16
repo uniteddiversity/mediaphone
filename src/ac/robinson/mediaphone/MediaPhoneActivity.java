@@ -74,8 +74,6 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.drawable.AnimationDrawable;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -2456,6 +2454,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		final BitmapLoaderTask bitmapLoaderTask = getBitmapLoaderTask(imageView);
 		if (bitmapLoaderTask != null) {
 			bitmapLoaderTask.cancel(true);
+			imageView.setTag(null); // clear the tag to signal that we've finished/cancelled loading
 		}
 	}
 
@@ -2465,6 +2464,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 			final String loadingImagePath = bitmapLoaderTask.mImagePath;
 			if (imagePath != null && (forceReload || !imagePath.equals(loadingImagePath))) {
 				bitmapLoaderTask.cancel(true); // cancel previous task for this ImageView
+				imageView.setTag(null); // clear the tag to signal that we've finished/cancelled loading
 			} else {
 				return false; // already loading the same image (or new path is null)
 			}
@@ -2513,6 +2513,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 					bitmap.recycle();
 				}
 				bitmap = null;
+				return;
 			}
 
 			if (mImageView != null && bitmap != null) {
@@ -2544,6 +2545,8 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 						imageView.setImageDrawable(transition);
 					}
 				}
+
+				imageView.setTag(null); // clear the tag to signal that we've finished loading
 			}
 		}
 	}

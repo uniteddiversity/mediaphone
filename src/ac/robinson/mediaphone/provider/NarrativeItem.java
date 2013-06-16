@@ -253,7 +253,8 @@ public class NarrativeItem implements BaseColumns {
 							final int linkedItemCount = MediaManager.countLinkedParentIdsByMediaId(contentResolver,
 									media.getInternalId()) + 1; // +1 to count this frame as well
 							longRunningAudioCounts.put(mediaPath, linkedItemCount);
-							frameDuration = Math.max(mediaDuration / linkedItemCount, frameDuration);
+							frameDuration = Math.max((int) Math.ceil(mediaDuration / (float) linkedItemCount),
+									frameDuration);
 
 							// add this item to the playback list
 							final int audioEndTime = narrativeTime + mediaDuration;
@@ -266,7 +267,8 @@ public class NarrativeItem implements BaseColumns {
 						} else {
 							// if we've inherited this audio then no need to add to playback, just calculate duration
 							// TODO: very naive currently - should we split more evenly to account for other lengths?
-							frameDuration = Math.max(mediaDuration / longRunningAudioCounts.get(mediaPath),
+							frameDuration = Math.max(
+									(int) Math.ceil(mediaDuration / (float) longRunningAudioCounts.get(mediaPath)),
 									frameDuration);
 						}
 					} else {
