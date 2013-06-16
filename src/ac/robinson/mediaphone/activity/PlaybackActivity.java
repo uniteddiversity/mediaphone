@@ -605,6 +605,9 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		if (!mPlaybackController.isDragging() && mPlaybackPositionMilliseconds >= mPlaybackDurationMilliseconds) {
 			mPlaying = false;
 			mPlaybackController.refreshController();
+			if (mAutoHide && !mSystemUiHider.isVisible()) {
+				mSystemUiHider.show();
+			}
 		}
 
 		// check whether we need to reload any existing content (due to screen rotation); if not, exit
