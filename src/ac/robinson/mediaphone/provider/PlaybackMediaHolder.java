@@ -26,23 +26,25 @@ public class PlaybackMediaHolder {
 	private final int mMediaStartTime;
 	private final int mMediaEndTime;
 
-	private final int mPlaybackOffset;
+	private final int mPlaybackOffsetStart;
+	private final int mPlaybackOffsetEnd;
 
 	public PlaybackMediaHolder(String parentId, String mediaPath, int mediaType, int startTime, int endTime,
-			int playbackOffset) {
+			int playbackOffsetStart, int playbackOffsetEnd) {
 		mParentFrameId = parentId;
 		mMediaPath = mediaPath;
 		mMediaType = mediaType;
 		mMediaStartTime = startTime;
 		mMediaEndTime = endTime;
-		mPlaybackOffset = playbackOffset;
+		mPlaybackOffsetStart = playbackOffsetStart;
+		mPlaybackOffsetEnd = playbackOffsetEnd;
 	}
 
 	public int getStartTime(boolean includePlaybackOffset) {
-		return includePlaybackOffset ? mMediaStartTime - mPlaybackOffset : mMediaStartTime;
+		return includePlaybackOffset ? mMediaStartTime - mPlaybackOffsetStart : mMediaStartTime;
 	}
 
 	public int getEndTime(boolean includePlaybackOffset) {
-		return includePlaybackOffset ? mMediaEndTime - mPlaybackOffset : mMediaEndTime;
+		return includePlaybackOffset ? mMediaEndTime - mPlaybackOffsetEnd : mMediaEndTime;
 	}
 }
