@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     tools:ignore="MissingRegistered" >
 
-    <com.sonyericsson.zoom.ImageZoomView
+    <ImageView
         android:id="@+id/playback_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -17,7 +17,7 @@
         android:scaleType="center"
         android:src="@null" />
 
-    <com.sonyericsson.zoom.ImageZoomView
+    <ImageView
         android:id="@+id/playback_image_background"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

@@ -146,8 +146,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		super.onConfigurationChanged(newConfig);
 
 		// our screen size has most likely changed - must reload cached images
-		mCurrentPlaybackImagePath = null;
-		mBackgroundPlaybackImagePath = null;
+		resetImagePaths();
 		mAudioPictureBitmap = null;
 		mFinishedLoadingImages = false;
 
@@ -222,11 +221,27 @@ public class PlaybackActivity extends MediaPhoneActivity {
 					return true;
 
 				case R.id.menu_edit_frame:
+					final String currentFrameId = getCurrentFrameId();
 					mSystemUiHider.show(); // need to show before the calculation for image size in frame editor
+
 					final Intent frameEditorIntent = new Intent(PlaybackActivity.this, FrameEditorActivity.class);
-					frameEditorIntent.putExtra(getString(R.string.extra_internal_id), getCurrentFrameId());
+					frameEditorIntent.putExtra(getString(R.string.extra_internal_id), currentFrameId);
 					startActivityForResult(frameEditorIntent, MediaPhone.R_id_intent_frame_editor);
-					// TODO: reload playback when returning
+
+					// make sure we reload playback when returning
+					mNarrativeContent = null;
+
+					// make sure not using any out of date images - done here so the ui will have updated before return
+					mCurrentPlaybackImage.setImageDrawable(null);
+					mBackgroundPlaybackImage.setImageDrawable(null);
+					resetImagePaths();
+
+					// make sure we return to the current frame
+					final Intent selfIntent = getIntent();
+					if (selfIntent != null) {
+						selfIntent.putExtra(getString(R.string.extra_internal_id), currentFrameId);
+						setIntent(selfIntent);
+					}
 					return true;
 
 				case R.id.menu_delete_narrative:
@@ -256,6 +271,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		if (hasFocus) {
 			if (!mPlaying) {
 				handleNonPlaybackButtonClick(false); // resume normal auto-hiding
+				refreshPlayback(); // update to remove deleted items from frame editing
 			}
 		}
 	}
@@ -525,8 +541,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
 
 				// the current and previous cached images are highly likely to be wrong - reload
-				mCurrentPlaybackImagePath = null;
-				mBackgroundPlaybackImagePath = null;
+				resetImagePaths();
 				mFinishedLoadingImages = false;
 
 				// like in seekTo, this is inefficient, but probably not worth working around
@@ -675,9 +690,10 @@ public class PlaybackActivity extends MediaPhoneActivity {
 								// out of memory...
 							}
 							mCurrentPlaybackImage.setImageBitmap(scaledBitmap);
+
 							mCurrentPlaybackImagePath = holder.mMediaPath;
 							mBackgroundPlaybackImagePath = null; // any previously cached image will now be wrong
-							mBackgroundPlaybackImage.setImageDrawable(null);
+
 							delayedImageLoad(PLAYBACK_UPDATE_INTERVAL_MILLIS);
 						}
 
@@ -871,6 +887,14 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	}
 
 	/**
+	 * Reset our cached image paths when reloading from, for example, a screen rotation, or an edit operation
+	 */
+	private void resetImagePaths() {
+		mCurrentPlaybackImagePath = null;
+		mBackgroundPlaybackImagePath = null;
+	}
+
+	/**
 	 * Check whether the given file is currently being played by one of our CustomMediaPlayer instances. If so, return
 	 * the player; if not, return null.
 	 * 
@@ -1026,6 +1050,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				// if we've reached the end of playback, start again from the beginning
 				mNarrativeContentIndex = 0;
 				mPlaybackPositionMilliseconds = 0;
+				resetImagePaths();
 			}
 			mPlaying = true;
 			playPreparedAudio();
@@ -1094,9 +1119,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 			// cancel pending images and reset cached paths
 			cancelLoadingScreenSizedImageInBackground(mCurrentPlaybackImage);
-			mCurrentPlaybackImagePath = null;
-			mBackgroundPlaybackImagePath = null; // any previously cached image will now be wrong
-			mBackgroundPlaybackImage.setImageDrawable(null);
+			resetImagePaths(); // any previously cached image will now be wrong
 
 			if (direction < 0) {
 				mNarrativeContentIndex = 0; // as in seekTo(), seeking backwards is far less efficient than forwards
