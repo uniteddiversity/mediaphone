@@ -32,7 +32,6 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.BaseColumns;
-import android.text.TextUtils;
 
 public class NarrativeItem implements BaseColumns {
 
@@ -127,6 +126,7 @@ public class NarrativeItem implements BaseColumns {
 			for (MediaItem media : frameComponents) {
 				final String mediaPath = media.getFile().getAbsolutePath();
 				final int mediaType = media.getType();
+				final int mediaDuration = media.getDurationMilliseconds();
 				boolean spanningAudio = false;
 
 				switch (mediaType) {
@@ -135,21 +135,26 @@ public class NarrativeItem implements BaseColumns {
 					case MediaPhoneProvider.TYPE_IMAGE_BACK:
 					case MediaPhoneProvider.TYPE_VIDEO:
 						currentContainer.mImagePath = mediaPath;
+						if (mediaDuration > 0) {
+							currentContainer.mImageDuration = mediaDuration; // preserve custom user-set durations
+							currentContainer.updateFrameMaxDuration(mediaDuration);
+						}
 						break;
 
 					case MediaPhoneProvider.TYPE_TEXT:
 						currentContainer.mTextContent = IOUtilities.getFileContents(mediaPath);
-						if (!TextUtils.isEmpty(currentContainer.mTextContent)) {
-							currentContainer.updateFrameMaxDuration(MediaItem
-									.getTextDurationMilliseconds(currentContainer.mTextContent));
-						} else {
-							currentContainer.mTextContent = null;
+						if (mediaDuration > 0) {
+							currentContainer.mTextDuration = mediaDuration; // preserve custom user-set durations
+							currentContainer.updateFrameMaxDuration(mediaDuration);
 						}
 						break;
 
 					case MediaPhoneProvider.TYPE_AUDIO:
-						currentContainer.addAudioFile(mediaPath, media.getDurationMilliseconds());
+						int insertedIndex = currentContainer.addAudioFile(mediaPath, mediaDuration);
 						spanningAudio = media.getSpanFrames();
+						if (spanningAudio && insertedIndex >= 0) {
+							currentContainer.mSpanningAudioIndex = insertedIndex;
+						}
 						break;
 				}
 
@@ -166,7 +171,8 @@ public class NarrativeItem implements BaseColumns {
 						}
 					}
 				} else {
-					currentContainer.updateFrameMaxDuration(media.getDurationMilliseconds());
+					// for other media we just use the normal maximum duration
+					currentContainer.updateFrameMaxDuration(mediaDuration);
 				}
 			}
 
@@ -177,17 +183,19 @@ public class NarrativeItem implements BaseColumns {
 		// TODO: this doesn't really respect/control other non-spanning audio (e.g., a longer sub-track than
 		// duration/count) - should decide whether it's best to split lengths equally regardless of this; adapt and pad
 		// equally but leaving a longer duration for the sub-track; or, use sub-track duration as frame duration
+		// note: if changing this behaviour, be sure to account for the similar version in getPlaybackContent
 		for (FrameMediaContainer container : exportedContent) {
 			boolean longAudioFound = false;
 			for (int i = 0, n = container.mAudioPaths.size(); i < n; i++) {
 				final Integer audioCount = longRunningAudio.get(container.mAudioPaths.get(i));
 				if (audioCount != null) {
-					container.updateFrameMaxDuration(container.mAudioDurations.get(i) / audioCount);
+					container.updateFrameMaxDuration((int) Math.ceil(container.mAudioDurations.get(i)
+							/ (float) audioCount));
 					longAudioFound = true;
 				}
 			}
 
-			// don't allow non-spanned frames to be shorter than the minimum duration
+			// don't allow non-spanned frames to be shorter than the minimum duration (unless user-requested)
 			if (!longAudioFound && container.mFrameMaxDuration <= 0) {
 				container.updateFrameMaxDuration(MediaPhone.PLAYBACK_EXPORT_MINIMUM_FRAME_DURATION);
 			}
@@ -267,6 +275,7 @@ public class NarrativeItem implements BaseColumns {
 						} else {
 							// if we've inherited this audio then no need to add to playback, just calculate duration
 							// TODO: very naive currently - should we split more evenly to account for other lengths?
+							// note: if changing behaviour, be sure to account for the similar version in getContentList
 							frameDuration = Math.max(
 									(int) Math.ceil(mediaDuration / (float) longRunningAudioCounts.get(mediaPath)),
 									frameDuration);
@@ -280,6 +289,7 @@ public class NarrativeItem implements BaseColumns {
 					}
 				} else {
 					// another type of media - just update frame duration from user-set media duration
+					// TODO: allow for, e.g., text spanning multiple images but with user-set durations
 					frameDuration = Math.max(mediaDuration, frameDuration);
 
 					// note that calculated text durations are stored as negative numbers so we can keep track of what's

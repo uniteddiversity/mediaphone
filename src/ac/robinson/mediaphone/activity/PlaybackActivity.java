@@ -118,7 +118,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 	// UI elements for displaying, caching and animating media
 	private SendToBackRelativeLayout mPlaybackRoot;
-	private ImageView mPlaybackImage;
+	private ImageView mCurrentPlaybackImage;
 	private ImageView mBackgroundPlaybackImage;
 	private AutoResizeTextView mPlaybackText;
 	private AutoResizeTextView mPlaybackTextWithImage;
@@ -184,24 +184,29 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 		// otherwise, we save the last viewed frame so we can jump to that one in the narrative browser
 		if (!narrativeDeleted) {
-			String currentFrame = null;
-			for (LinkedHashMap.Entry<Integer, String> entry : mTimeToFrameMap.entrySet()) {
-				if (mPlaybackPositionMilliseconds >= entry.getKey()) {
-					currentFrame = entry.getValue();
-				} else {
-					break;
-				}
-			}
-			saveLastEditedFrame(currentFrame);
+			saveLastEditedFrame(getCurrentFrameId());
 		}
 
 		super.onBackPressed();
+	}
+
+	private String getCurrentFrameId() {
+		String currentFrame = null;
+		for (LinkedHashMap.Entry<Integer, String> entry : mTimeToFrameMap.entrySet()) {
+			if (mPlaybackPositionMilliseconds >= entry.getKey()) {
+				currentFrame = entry.getValue();
+			} else {
+				break;
+			}
+		}
+		return currentFrame;
 	}
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		MenuInflater inflater = getMenuInflater();
 		inflater.inflate(R.menu.export_narrative, menu);
+		inflater.inflate(R.menu.edit_frame, menu);
 		inflater.inflate(R.menu.make_template, menu);
 		inflater.inflate(R.menu.delete_narrative, menu);
 		return super.onCreateOptionsMenu(menu);
@@ -214,6 +219,14 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			switch (item.getItemId()) {
 				case R.id.menu_make_template:
 					runQueuedBackgroundTask(getNarrativeTemplateRunnable(mNarrativeInternalId, true));
+					return true;
+
+				case R.id.menu_edit_frame:
+					mSystemUiHider.show(); // need to show before the calculation for image size in frame editor
+					final Intent frameEditorIntent = new Intent(PlaybackActivity.this, FrameEditorActivity.class);
+					frameEditorIntent.putExtra(getString(R.string.extra_internal_id), getCurrentFrameId());
+					startActivityForResult(frameEditorIntent, MediaPhone.R_id_intent_frame_editor);
+					// TODO: reload playback when returning
 					return true;
 
 				case R.id.menu_delete_narrative:
@@ -277,7 +290,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 		// keep hold of key UI elements
 		mPlaybackRoot = (SendToBackRelativeLayout) findViewById(R.id.playback_root);
-		mPlaybackImage = (ImageView) findViewById(R.id.playback_image);
+		mCurrentPlaybackImage = (ImageView) findViewById(R.id.playback_image);
 		mBackgroundPlaybackImage = (ImageView) findViewById(R.id.playback_image_background);
 		mPlaybackText = (AutoResizeTextView) findViewById(R.id.playback_text);
 		mPlaybackTextWithImage = (AutoResizeTextView) findViewById(R.id.playback_text_with_image);
@@ -365,7 +378,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				}
 			}
 		};
-		mPlaybackImage.setOnClickListener(systemUIClickHandler);
+		mCurrentPlaybackImage.setOnClickListener(systemUIClickHandler);
 		mBackgroundPlaybackImage.setOnClickListener(systemUIClickHandler);
 		mPlaybackText.setOnClickListener(systemUIClickHandler);
 		mPlaybackTextWithImage.setOnClickListener(systemUIClickHandler);
@@ -449,7 +462,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			if (mCurrentPlaybackImagePath != null) {
 				// don't fade in the image here - if we do, we can possibly get a race condition with loading and
 				// fading, resulting in both being shown, one on top of the other; best to just load in place
-				loadScreenSizedImageInBackground(mPlaybackImage, mCurrentPlaybackImagePath, true,
+				loadScreenSizedImageInBackground(mCurrentPlaybackImage, mCurrentPlaybackImagePath, true,
 						MediaPhoneActivity.FadeType.NONE);
 			}
 		}
@@ -508,7 +521,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			@Override
 			public void seekEnded() {
 				// when a drag/seek ends we need to make sure we don't continue reloading any cached images
-				cancelLoadingScreenSizedImageInBackground(mPlaybackImage);
+				cancelLoadingScreenSizedImageInBackground(mCurrentPlaybackImage);
 				mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
 
 				// the current and previous cached images are highly likely to be wrong - reload
@@ -653,7 +666,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 						// overflow limit if we just background loaded everything) - instead, load a downscaled
 						// version on the UI thread then update to show the full resolution version after a timeout
 						if (itemAppliesNow && !holder.mMediaPath.equals(mCurrentPlaybackImagePath)) {
-							cancelLoadingScreenSizedImageInBackground(mPlaybackImage);
+							cancelLoadingScreenSizedImageInBackground(mCurrentPlaybackImage);
 							Bitmap scaledBitmap = null;
 							try {
 								scaledBitmap = BitmapUtilities.loadAndCreateScaledBitmap(holder.mMediaPath,
@@ -661,7 +674,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 							} catch (Throwable t) {
 								// out of memory...
 							}
-							mPlaybackImage.setImageBitmap(scaledBitmap);
+							mCurrentPlaybackImage.setImageBitmap(scaledBitmap);
 							mCurrentPlaybackImagePath = holder.mMediaPath;
 							mBackgroundPlaybackImagePath = null; // any previously cached image will now be wrong
 							mBackgroundPlaybackImage.setImageDrawable(null);
@@ -682,7 +695,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 										mScreenSize.x, mScreenSize.y, BitmapUtilities.ScalingLogic.FIT, true);
 							} catch (Throwable t) { // out of memory...
 							}
-							mPlaybackImage.setImageBitmap(scaledBitmap);
+							mCurrentPlaybackImage.setImageBitmap(scaledBitmap);
 						}
 						mCurrentPlaybackImagePath = holder.mMediaPath;
 
@@ -776,7 +789,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				mPlaybackText.setVisibility(View.VISIBLE);
 
 				// make sure we don't show any images
-				mPlaybackImage.setImageDrawable(null);
+				mCurrentPlaybackImage.setImageDrawable(null);
 				mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
 				mCurrentPlaybackImagePath = null; // the current image is highly likely to be wrong - reload
 			}
@@ -801,11 +814,11 @@ public class PlaybackActivity extends MediaPhoneActivity {
 						}
 					}
 					mCurrentPlaybackImagePath = String.valueOf(R.raw.ic_audio_playback); // now the current image
-					mPlaybackImage.setImageBitmap(mAudioPictureBitmap);
+					mCurrentPlaybackImage.setImageBitmap(mAudioPictureBitmap);
 				} else {
 					// we have no media at all...
 
-					mPlaybackImage.setImageDrawable(null); // make sure we don't show any images
+					mCurrentPlaybackImage.setImageDrawable(null); // make sure we don't show any images
 					mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
 					mCurrentPlaybackImagePath = null; // the current image is highly likely to be wrong - reload
 				}
@@ -839,13 +852,13 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			delayedImageLoad(PLAYBACK_UPDATE_INTERVAL_MILLIS * 5);
 		}
 
-		ImageView temp = mPlaybackImage;
-		mPlaybackImage = mBackgroundPlaybackImage;
+		ImageView temp = mCurrentPlaybackImage;
+		mCurrentPlaybackImage = mBackgroundPlaybackImage;
 		mBackgroundPlaybackImage = temp;
 
 		// the new image should be at the back to fade between frames - use a custom layout for this
-		mPlaybackRoot.sendChildToBack(mPlaybackImage);
-		mPlaybackImage.setVisibility(View.VISIBLE);
+		mPlaybackRoot.sendChildToBack(mCurrentPlaybackImage);
+		mCurrentPlaybackImage.setVisibility(View.VISIBLE);
 
 		// now fade out the old image
 		// TODO: if we've seeked, and swap from a null image before loading, this looks bad; probably a non-problem...
@@ -1080,7 +1093,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			}
 
 			// cancel pending images and reset cached paths
-			cancelLoadingScreenSizedImageInBackground(mPlaybackImage);
+			cancelLoadingScreenSizedImageInBackground(mCurrentPlaybackImage);
 			mCurrentPlaybackImagePath = null;
 			mBackgroundPlaybackImagePath = null; // any previously cached image will now be wrong
 			mBackgroundPlaybackImage.setImageDrawable(null);
