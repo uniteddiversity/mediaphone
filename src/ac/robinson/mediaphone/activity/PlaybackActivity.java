@@ -56,6 +56,7 @@ import android.media.MediaPlayer.OnPreparedListener;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -665,6 +666,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		// (if so, need to beware of recycling the audio image bitmap, or just check for isRecycled() on load)
 		PlaybackMediaHolder textItem = null;
 		boolean hasImage = false;
+		boolean hasAudio = false;
 		for (PlaybackMediaHolder holder : mCurrentPlaybackItems) {
 			// no need to check end time - we've removed invalid items already
 			boolean itemAppliesNow = holder.getStartTime(true) <= mPlaybackPositionMilliseconds;
@@ -778,7 +780,11 @@ public class PlaybackActivity extends MediaPhoneActivity {
 						if (!dataLoaded) {
 							// we couldn't load anything - reset this player so we can reuse it
 							currentMediaPlayer.resetCustomAttributes();
+						} else {
+							hasAudio |= itemAppliesNow;
 						}
+					} else {
+						hasAudio |= itemAppliesNow;
 					}
 					break;
 
@@ -790,54 +796,46 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			}
 		}
 
+		// no image content on this frame - remove
+		if (!hasImage && !hasAudio) {
+			mCurrentPlaybackImage.setImageDrawable(null);
+			mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
+			mCurrentPlaybackImagePath = null; // the current image is highly likely to be wrong - reload
+		}
+
 		// load text last so we know whether we've loaded image/audio or not
 		if (textItem != null) {
 			// TODO: currently we load text every time - could check, but this would require loading the file anyway...
-			if (hasImage) {
-				mPlaybackText.setVisibility(View.GONE);
-				mPlaybackTextWithImage.setVisibility(View.GONE);
-				mPlaybackTextWithImage.setText(IOUtilities.getFileContents(textItem.mMediaPath));
-				mPlaybackTextWithImage.setVisibility(View.VISIBLE);
+			String textContents = IOUtilities.getFileContents(textItem.mMediaPath).trim();
+			if (!TextUtils.isEmpty(textContents)) {
+				if (hasImage) {
+					mPlaybackText.setVisibility(View.GONE);
+					mPlaybackTextWithImage.setText(textContents);
+					mPlaybackTextWithImage.setVisibility(View.VISIBLE);
+				} else {
+					mPlaybackTextWithImage.setVisibility(View.GONE);
+					mPlaybackText.setText(textContents);
+					mPlaybackText.setVisibility(View.VISIBLE);
+				}
 			} else {
-				mPlaybackTextWithImage.setVisibility(View.GONE);
 				mPlaybackText.setVisibility(View.GONE);
-				mPlaybackText.setText(IOUtilities.getFileContents(textItem.mMediaPath));
-				mPlaybackText.setVisibility(View.VISIBLE);
-
-				// make sure we don't show any images
-				mCurrentPlaybackImage.setImageDrawable(null);
-				mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
-				mCurrentPlaybackImagePath = null; // the current image is highly likely to be wrong - reload
+				mPlaybackTextWithImage.setVisibility(View.GONE);
 			}
 		} else {
 			mPlaybackText.setVisibility(View.GONE);
 			mPlaybackTextWithImage.setVisibility(View.GONE);
 
-			if (!hasImage) {
-				boolean hasAudio = false;
-				for (CustomMediaPlayer p : mMediaPlayers) {
-					if (p.mMediaPath != null) {
-						hasAudio = true;
-						break;
+			// an audio-only frame - show the audio icon
+			if (!hasImage && hasAudio) {
+				if (mAudioPictureBitmap == null) {
+					try {
+						mAudioPictureBitmap = SVGParser.getSVGFromResource(getResources(), R.raw.ic_audio_playback)
+								.getBitmap(mScreenSize.x, mScreenSize.y);
+					} catch (Throwable t) { // out of memory, or parse error...
 					}
 				}
-				if (hasAudio) {
-					if (mAudioPictureBitmap == null) {
-						try {
-							mAudioPictureBitmap = SVGParser.getSVGFromResource(getResources(), R.raw.ic_audio_playback)
-									.getBitmap(mScreenSize.x, mScreenSize.y);
-						} catch (Throwable t) { // out of memory, or parse error...
-						}
-					}
-					mCurrentPlaybackImagePath = String.valueOf(R.raw.ic_audio_playback); // now the current image
-					mCurrentPlaybackImage.setImageBitmap(mAudioPictureBitmap);
-				} else {
-					// we have no media at all...
-
-					mCurrentPlaybackImage.setImageDrawable(null); // make sure we don't show any images
-					mImageLoadHandler.removeCallbacks(mImageLoadRunnable);
-					mCurrentPlaybackImagePath = null; // the current image is highly likely to be wrong - reload
-				}
+				mCurrentPlaybackImagePath = String.valueOf(R.raw.ic_audio_playback); // now the current image
+				mCurrentPlaybackImage.setImageBitmap(mAudioPictureBitmap);
 			}
 		}
 

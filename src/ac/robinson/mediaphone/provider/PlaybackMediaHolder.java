@@ -20,6 +20,8 @@ package ac.robinson.mediaphone.provider;
 
 public class PlaybackMediaHolder {
 	public final String mParentFrameId;
+	public final String mMediaItemId;
+
 	public final String mMediaPath;
 	public final int mMediaType;
 
@@ -29,9 +31,10 @@ public class PlaybackMediaHolder {
 	private final int mPlaybackOffsetStart;
 	private final int mPlaybackOffsetEnd;
 
-	public PlaybackMediaHolder(String parentId, String mediaPath, int mediaType, int startTime, int endTime,
-			int playbackOffsetStart, int playbackOffsetEnd) {
+	public PlaybackMediaHolder(String parentId, String mediaId, String mediaPath, int mediaType, int startTime,
+			int endTime, int playbackOffsetStart, int playbackOffsetEnd) {
 		mParentFrameId = parentId;
+		mMediaItemId = mediaId;
 		mMediaPath = mediaPath;
 		mMediaType = mediaType;
 		mMediaStartTime = startTime;

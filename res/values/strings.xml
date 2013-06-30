@@ -189,9 +189,9 @@
     <string name="preferences_audio_bitrate_summary">Try changing if you have audio recording problems. Higher quality causes slower export</string>
     <string name="preferences_playback_export">Playback and export</string>
     <string name="preferences_minimum_frame_duration_title">Frame duration</string>
-    <string name="preferences_minimum_frame_duration_summary">Default minimum duration for each frame. Double tap here to reset to default</string>
+    <string name="preferences_minimum_frame_duration_summary">Default duration for each frame. Double tap here to reset</string>
     <string name="preferences_word_duration_title">Word duration</string>
-    <string name="preferences_word_duration_summary">Default minimum duration for each word of text. Double tap here to reset to default</string>
+    <string name="preferences_word_duration_summary">Default duration for each word of text. Double tap here to reset</string>
     <string name="preferences_import">Import</string>
     <string name="preferences_watch_for_files_title">Scan for new narratives</string>
     <string name="preferences_watch_for_files_summary_off">Narratives sent via Bluetooth will not be imported automatically; you can import via the \'Scan and Import\' menu option</string>
