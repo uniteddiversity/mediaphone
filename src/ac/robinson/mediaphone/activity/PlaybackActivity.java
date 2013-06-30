@@ -547,7 +547,11 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				mNarrativeContentIndex = 0;
 
 				// schedule playback to continue
-				playPreparedAudio();
+				if (mPlaying) {
+					playPreparedAudio(true);
+				} else {
+					pauseAudio();
+				}
 				mStateChanged = true; // we've changed state - forces a reload when playback is paused
 				delayedPlaybackAdvance();
 			}
@@ -836,9 +840,9 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			}
 		}
 
-		// start/seek any pre-cached audio players that might now be ready and are now relevant due to seeking
+		// start/seek any pre-cached audio players that might now be ready
 		if (hasAudio) {
-			playPreparedAudio(); // TODO: worth considering whether audio is actually necessary for seeking...
+			playPreparedAudio(false);
 		}
 
 		// queue advancing the playback handler
@@ -934,7 +938,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	 * that apply to the current playback position have been prepared. If any applicable items are not prepared, nothing
 	 * will be done.
 	 */
-	private void playPreparedAudio() {
+	private void playPreparedAudio(boolean force) {
 		if (mPlaying) {
 			boolean allPrepared = true;
 			boolean hasAudio = false; // if there's no audio we'd still be allPrepared mode otherwise
@@ -949,16 +953,22 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			}
 			if (hasAudio && allPrepared) {
 				for (CustomMediaPlayer player : mMediaPlayers) {
-					try {
-						if (player.mPlaybackPrepared && !player.isPlaying() && !player.mHasPlayed) {
+					if (player.mPlaybackPrepared) {
+						try {
 							if (player.mMediaStartTime <= mPlaybackPositionMilliseconds
 									&& player.mMediaEndTime > mPlaybackPositionMilliseconds) {
-								player.start();
-								player.seekTo(mPlaybackPositionMilliseconds - player.mMediaStartTime);
+								if (!player.isPlaying() && (force || !player.mHasPlayed)) {
+									player.seekTo(mPlaybackPositionMilliseconds - player.mMediaStartTime);
+									player.start();
+								}
+							} else {
+								if (player.isPlaying()) {
+									player.pause();
+								}
 							}
+						} catch (IllegalStateException e) {
+							player.resetCustomAttributes();
 						}
-					} catch (IllegalStateException e) {
-						player.resetCustomAttributes();
 					}
 				}
 			}
@@ -971,24 +981,42 @@ public class PlaybackActivity extends MediaPhoneActivity {
 					&& player.mMediaEndTime > mPlaybackPositionMilliseconds) {
 				if (player.mPlaybackPrepared) {
 					try {
+						player.seekTo(mPlaybackPositionMilliseconds - player.mMediaStartTime);
 						if (!player.isPlaying()) {
 							player.start();
 						}
-						player.seekTo(mPlaybackPositionMilliseconds - player.mMediaStartTime);
 					} catch (IllegalStateException e) {
 						player.resetCustomAttributes();
 					}
 				}
 			} else {
-				try {
-					player.pause();
-				} catch (IllegalStateException e) {
-					player.resetCustomAttributes();
+				if (player.mPlaybackPrepared) {
+					try {
+						if (player.isPlaying()) {
+							player.pause();
+						}
+					} catch (IllegalStateException e) {
+						player.resetCustomAttributes();
+					}
 				}
 
 				// need to track whether audio has played to deal with timing errors between visuals and audio;
 				// but when seeking need to re-enable audio that has already been played so it can be replayed
 				player.mHasPlayed = false;
+			}
+		}
+	}
+
+	private void pauseAudio() {
+		for (CustomMediaPlayer player : mMediaPlayers) {
+			if (player.mPlaybackPrepared) {
+				try {
+					if (player.isPlaying()) {
+						player.pause();
+					}
+				} catch (IllegalStateException e) {
+					player.resetCustomAttributes();
+				}
 			}
 		}
 	}
@@ -1001,7 +1029,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				player.mPlaybackPrepared = true;
 				player.mMediaEndTime = player.mMediaStartTime + player.getDuration();
 			}
-			playPreparedAudio(); // play this audio if appropriate - will wait for all applicable items to be prepared
+			playPreparedAudio(false); // play audio if appropriate - will wait for all applicable items to be prepared
 		}
 	};
 
@@ -1072,7 +1100,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 				resetImagePaths();
 			}
 			mPlaying = true;
-			playPreparedAudio();
+			playPreparedAudio(true);
 			delayedPlaybackAdvance();
 		}
 
@@ -1080,15 +1108,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		public void pause() {
 			// TODO: stop sending handler messages? (rather than just not updating) - need to consider seeking if so
 			mPlaying = false;
-			for (CustomMediaPlayer player : mMediaPlayers) {
-				try {
-					if (player.mPlaybackPrepared && player.isPlaying()) {
-						player.pause();
-					}
-				} catch (IllegalStateException e) {
-					player.resetCustomAttributes();
-				}
-			}
+			pauseAudio();
 		}
 
 		@Override
@@ -1146,7 +1166,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			} else {
 				mPlaybackPositionMilliseconds = nextFrameTime;
 			}
-			seekPlayingAudio();
+			playPreparedAudio(true);
 
 			// we call refreshPlayback directly, so must stop any queued playback advances
 			mMediaAdvanceHandler.removeCallbacks(mMediaAdvanceRunnable);
