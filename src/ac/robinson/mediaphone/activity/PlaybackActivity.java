@@ -149,7 +149,6 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		// our screen size has most likely changed - must reload cached images
 		resetImagePaths();
 		mAudioPictureBitmap = null;
-		mFinishedLoadingImages = false;
 
 		// update the cached screen size
 		mScreenSize = UIUtilities.getScreenSize(getWindowManager());
@@ -543,7 +542,6 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 				// the current and previous cached images are highly likely to be wrong - reload
 				resetImagePaths();
-				mFinishedLoadingImages = false;
 
 				// like in seekTo, this is inefficient, but probably not worth working around
 				mNarrativeContentIndex = 0;
@@ -739,7 +737,6 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 				case MediaPhoneProvider.TYPE_AUDIO:
 					if (getExistingAudio(holder.mMediaPath) == null) {
-
 						CustomMediaPlayer currentMediaPlayer = getEmptyPlayer();
 						if (currentMediaPlayer == null) {
 							// no available audio players - most likely trying to cache too far in advance; ignore
@@ -839,8 +836,8 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			}
 		}
 
-		// start/seek any pre-cached audio players that might now be ready
-		if (mPlaybackController.isDragging()) {
+		// start/seek any pre-cached audio players that might now be ready and are now relevant due to seeking
+		if (hasAudio) {
 			playPreparedAudio(); // TODO: worth considering whether audio is actually necessary for seeking...
 		}
 
@@ -890,6 +887,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	private void resetImagePaths() {
 		mCurrentPlaybackImagePath = null;
 		mBackgroundPlaybackImagePath = null;
+		mFinishedLoadingImages = false;
 	}
 
 	/**
@@ -919,6 +917,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	private CustomMediaPlayer getEmptyPlayer() {
 		for (CustomMediaPlayer p : mMediaPlayers) {
 			if (p.mMediaPath == null) {
+				p.resetCustomAttributes();
 				return p;
 			}
 		}
@@ -938,7 +937,7 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	private void playPreparedAudio() {
 		if (mPlaying) {
 			boolean allPrepared = true;
-			boolean hasAudio = false; // if there's no audio we'd still be allPrepared otherwise
+			boolean hasAudio = false; // if there's no audio we'd still be allPrepared mode otherwise
 			for (CustomMediaPlayer player : mMediaPlayers) {
 				if (player.mMediaPath != null) {
 					hasAudio = true;
@@ -951,9 +950,9 @@ public class PlaybackActivity extends MediaPhoneActivity {
 			if (hasAudio && allPrepared) {
 				for (CustomMediaPlayer player : mMediaPlayers) {
 					try {
-						if (player.mPlaybackPrepared && !player.isPlaying()) {
+						if (player.mPlaybackPrepared && !player.isPlaying() && !player.mHasPlayed) {
 							if (player.mMediaStartTime <= mPlaybackPositionMilliseconds
-									&& player.mMediaStartTime + player.getDuration() > mPlaybackPositionMilliseconds) {
+									&& player.mMediaEndTime > mPlaybackPositionMilliseconds) {
 								player.start();
 								player.seekTo(mPlaybackPositionMilliseconds - player.mMediaStartTime);
 							}
@@ -968,18 +967,28 @@ public class PlaybackActivity extends MediaPhoneActivity {
 
 	private void seekPlayingAudio() {
 		for (CustomMediaPlayer player : mMediaPlayers) {
-			try {
-				if (player.mPlaybackPrepared && player.isPlaying()) {
-					if (player.mMediaStartTime <= mPlaybackPositionMilliseconds
-							&& player.mMediaStartTime + player.getDuration() > mPlaybackPositionMilliseconds) {
-						player.start();
+			if (player.mMediaStartTime <= mPlaybackPositionMilliseconds
+					&& player.mMediaEndTime > mPlaybackPositionMilliseconds) {
+				if (player.mPlaybackPrepared) {
+					try {
+						if (!player.isPlaying()) {
+							player.start();
+						}
 						player.seekTo(mPlaybackPositionMilliseconds - player.mMediaStartTime);
-					} else {
-						player.stop();
+					} catch (IllegalStateException e) {
+						player.resetCustomAttributes();
 					}
 				}
-			} catch (IllegalStateException e) {
-				player.resetCustomAttributes();
+			} else {
+				try {
+					player.pause();
+				} catch (IllegalStateException e) {
+					player.resetCustomAttributes();
+				}
+
+				// need to track whether audio has played to deal with timing errors between visuals and audio;
+				// but when seeking need to re-enable audio that has already been played so it can be replayed
+				player.mHasPlayed = false;
 			}
 		}
 	}
@@ -988,7 +997,9 @@ public class PlaybackActivity extends MediaPhoneActivity {
 		@Override
 		public void onPrepared(MediaPlayer mp) {
 			if (mp instanceof CustomMediaPlayer) {
-				((CustomMediaPlayer) mp).mPlaybackPrepared = true;
+				CustomMediaPlayer player = (CustomMediaPlayer) mp;
+				player.mPlaybackPrepared = true;
+				player.mMediaEndTime = player.mMediaStartTime + player.getDuration();
 			}
 			playPreparedAudio(); // play this audio if appropriate - will wait for all applicable items to be prepared
 		}
@@ -1026,14 +1037,24 @@ public class PlaybackActivity extends MediaPhoneActivity {
 	 */
 	private class CustomMediaPlayer extends MediaPlayer {
 		public boolean mPlaybackPrepared = false;
+		public boolean mHasPlayed = false;
 		public String mMediaPath = null;
 		public int mMediaStartTime = 0;
+		public int mMediaEndTime = 0;
 
 		public void resetCustomAttributes() {
 			mPlaybackPrepared = false;
+			mHasPlayed = false;
 			mMediaPath = null;
 			mMediaStartTime = 0;
+			mMediaEndTime = 0;
 			reset();
+		}
+
+		@Override
+		public void start() {
+			mHasPlayed = true;
+			super.start();
 		}
 	}
 

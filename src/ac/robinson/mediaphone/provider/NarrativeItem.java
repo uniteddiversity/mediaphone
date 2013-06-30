@@ -108,6 +108,14 @@ public class NarrativeItem implements BaseColumns {
 		mDeleted = deleted ? 1 : 0;
 	}
 
+	/**
+	 * Parses this narrative's content, returning a compacted version of each frame. Used for exporting a narrative's
+	 * content. Items that span more than one frame are simply repeated; except for audio, which is spread evenly over
+	 * all the frames it applies to.
+	 * 
+	 * @param contentResolver
+	 * @return
+	 */
 	public ArrayList<FrameMediaContainer> getContentList(ContentResolver contentResolver) {
 
 		ArrayList<FrameMediaContainer> exportedContent = new ArrayList<FrameMediaContainer>();
@@ -135,16 +143,16 @@ public class NarrativeItem implements BaseColumns {
 					case MediaPhoneProvider.TYPE_IMAGE_BACK:
 					case MediaPhoneProvider.TYPE_VIDEO:
 						currentContainer.mImagePath = mediaPath;
-						if (mediaDuration > 0) {
-							currentContainer.mImageDuration = mediaDuration; // preserve custom user-set durations
+						if (mediaDuration > 0) { // preserve custom user-set durations
+							currentContainer.mImageDuration = mediaDuration;
 							currentContainer.updateFrameMaxDuration(mediaDuration);
 						}
 						break;
 
 					case MediaPhoneProvider.TYPE_TEXT:
 						currentContainer.mTextContent = IOUtilities.getFileContents(mediaPath);
-						if (mediaDuration > 0) {
-							currentContainer.mTextDuration = mediaDuration; // preserve custom user-set durations
+						if (mediaDuration > 0) { // preserve custom user-set durations
+							currentContainer.mTextDuration = mediaDuration;
 							currentContainer.updateFrameMaxDuration(mediaDuration);
 						}
 						break;
@@ -153,7 +161,7 @@ public class NarrativeItem implements BaseColumns {
 						int insertedIndex = currentContainer.addAudioFile(mediaPath, mediaDuration);
 						spanningAudio = media.getSpanFrames();
 						if (spanningAudio && insertedIndex >= 0) {
-							currentContainer.mSpanningAudioIndex = insertedIndex;
+							currentContainer.mSpanningAudioIndex = insertedIndex; // only 1 spanning item per frame
 						}
 						break;
 				}
@@ -163,6 +171,7 @@ public class NarrativeItem implements BaseColumns {
 				if (spanningAudio) {
 					if (frameId.equals(media.getParentId())) {
 						longRunningAudio.put(mediaPath, 1); // this is the actual parent frame
+						currentContainer.mSpanningAudioRoot = true;
 					} else {
 						// this is a linked frame - increase the count
 						Integer existingAudioCount = longRunningAudio.remove(mediaPath);
@@ -235,7 +244,7 @@ public class NarrativeItem implements BaseColumns {
 		int lastFrame = narrativeFrames.size() - 1;
 		for (FrameItem frame : narrativeFrames) {
 			final String frameId = frame.getInternalId();
-			mTimeToFrameMap.put(narrativeDuration, frameId); // store the frame's start time
+			mTimeToFrameMap.put(narrativeTime, frameId); // store the frame's start time
 			ArrayList<MediaItem> frameComponents = MediaManager.findMediaByParentId(contentResolver, frameId);
 
 			int frameDuration = 0;
@@ -281,7 +290,6 @@ public class NarrativeItem implements BaseColumns {
 							// if we've inherited this audio then no need to add to playback, just calculate duration
 							// TODO: very naive currently - should we split more evenly to account for other lengths?
 							// note: if changing behaviour, be sure to account for the similar version in getContentList
-							// until this version fully replaces getContentList
 							frameDuration = Math.max(
 									(int) Math.ceil(mediaDuration / (float) longRunningAudioCounts.get(mediaPath)),
 									frameDuration);
@@ -400,7 +408,7 @@ public class NarrativeItem implements BaseColumns {
 			previousFrameImage = frameImage;
 			previousFrameText = frameText;
 		}
-
+		
 		narrativeDescriptor.mNarrativeDuration = narrativeDuration;
 		return narrativeContent;
 	}
