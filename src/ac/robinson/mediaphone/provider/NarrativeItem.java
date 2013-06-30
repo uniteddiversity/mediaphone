@@ -238,6 +238,7 @@ public class NarrativeItem implements BaseColumns {
 
 		PlaybackMediaHolder previousFrameImage = null;
 		PlaybackMediaHolder previousFrameText = null;
+		PlaybackMediaHolder lastAudioItem = null; // the last audio item in the narrative
 
 		ArrayList<FrameItem> narrativeFrames = FramesManager.findFramesByParentId(contentResolver, mInternalId);
 		int currentFrame = 0;
@@ -268,6 +269,8 @@ public class NarrativeItem implements BaseColumns {
 				final int mediaDuration = media.getDurationMilliseconds();
 				if (mediaType == MediaPhoneProvider.TYPE_AUDIO) {
 					final String mediaPath = media.getFile().getAbsolutePath();
+					final int audioEndTime = narrativeTime + mediaDuration;
+					PlaybackMediaHolder audioItem = null;
 					if (media.getSpanFrames()) {
 						hasSpanningAudio = true;
 						if (frameId.equals(media.getParentId())) {
@@ -279,9 +282,9 @@ public class NarrativeItem implements BaseColumns {
 									frameDuration);
 
 							// add this item to the playback list
-							final int audioEndTime = narrativeTime + mediaDuration;
-							narrativeContent.add(new PlaybackMediaHolder(frameId, media.getInternalId(), mediaPath,
-									mediaType, narrativeTime, audioEndTime, 0, 0));
+							audioItem = new PlaybackMediaHolder(frameId, media.getInternalId(), mediaPath, mediaType,
+									narrativeTime, audioEndTime, 0, 0);
+							narrativeContent.add(audioItem);
 							audioItemsAdded += 1;
 
 							// because of rounding errors, we could be wrong in the narrative duration here - correct
@@ -297,9 +300,19 @@ public class NarrativeItem implements BaseColumns {
 					} else {
 						// a normal non-spanning audio item - update duration and add
 						frameDuration = Math.max(mediaDuration, frameDuration);
-						narrativeContent.add(new PlaybackMediaHolder(frameId, media.getInternalId(), mediaPath,
-								mediaType, narrativeTime, narrativeTime + mediaDuration, 0, 0));
+						audioItem = new PlaybackMediaHolder(frameId, media.getInternalId(), mediaPath, mediaType,
+								narrativeTime, audioEndTime, 0, 0);
+						narrativeContent.add(audioItem);
 						audioItemsAdded += 1;
+					}
+
+					// store the last audio item for displaying it at the end of playback when no other items present
+					if (audioItem != null) {
+						if (lastAudioItem == null) {
+							lastAudioItem = audioItem;
+						} else if (audioEndTime > lastAudioItem.getEndTime(false)) {
+							lastAudioItem = audioItem;
+						}
 					}
 				} else {
 					// another type of media - just update frame duration from user-set media duration
@@ -392,15 +405,25 @@ public class NarrativeItem implements BaseColumns {
 					if (imageAdjustment && frameImage == null && previousFrameImage != null) {
 						// no need to deal with lastFrameAdjustments as this will never be the last item
 						int replacementPosition = narrativeContent.indexOf(previousFrameImage);
-						narrativeContent.set(replacementPosition,
-								new PlaybackMediaHolder(previousFrameImage.mParentFrameId,
-										previousFrameImage.mMediaItemId, previousFrameImage.mMediaPath,
-										previousFrameImage.mMediaType, previousFrameImage.getStartTime(false),
-										previousFrameImage.getEndTime(false),
-										narrativeDescriptor.mNarrativeImageAdjustment, 0));
+						previousFrameImage = new PlaybackMediaHolder(previousFrameImage.mParentFrameId,
+								previousFrameImage.mMediaItemId, previousFrameImage.mMediaPath,
+								previousFrameImage.mMediaType, previousFrameImage.getStartTime(false),
+								previousFrameImage.getEndTime(false), narrativeDescriptor.mNarrativeImageAdjustment, 0);
+						narrativeContent.set(replacementPosition, previousFrameImage);
 					}
 					break;
 				}
+			}
+
+			// if we've got just audio on a frame and we're the last frame we need to adjust the last audio item to add
+			// an extra 1ms so that it remains in view when playback stops
+			if (lastFrameAdjustments && frameImage == null && frameText == null && lastAudioItem != null) {
+				int replacementPosition = narrativeContent.indexOf(lastAudioItem);
+				lastAudioItem = new PlaybackMediaHolder(lastAudioItem.mParentFrameId, lastAudioItem.mMediaItemId,
+						lastAudioItem.mMediaPath, lastAudioItem.mMediaType, lastAudioItem.getStartTime(false),
+						lastAudioItem.getEndTime(false), 0, -1);
+				narrativeContent.set(replacementPosition, lastAudioItem);
+
 			}
 
 			narrativeTime += frameDuration;
@@ -408,7 +431,7 @@ public class NarrativeItem implements BaseColumns {
 			previousFrameImage = frameImage;
 			previousFrameText = frameText;
 		}
-		
+
 		narrativeDescriptor.mNarrativeDuration = narrativeDuration;
 		return narrativeContent;
 	}
