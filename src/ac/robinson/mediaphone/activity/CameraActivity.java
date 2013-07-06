@@ -709,7 +709,6 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 		protected Boolean doInBackground(byte[]... params) {
 			byte[] data = params[0];
 			if (data == null) {
-				UIUtilities.showToast(CameraActivity.this, R.string.save_picture_failed);
 				if (MediaPhone.DEBUG)
 					Log.d(DebugUtilities.getLogTag(this), "SavePreviewFrameTask: data is null");
 				return false;
@@ -750,7 +749,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 					if (!BitmapUtilities.saveYUYToJPEG(data, imageMediaItem.getFile(), pictureConfig.imageFormat,
 							mJpegSaveQuality, pictureConfig.width, pictureConfig.height, rotation,
 							mCameraConfiguration.usingFrontCamera)) {
-						UIUtilities.showToast(CameraActivity.this, R.string.save_picture_failed);
+						return false;
 					}
 
 				} else if (pictureConfig.imageFormat == ImageFormat.JPEG) {
@@ -759,7 +758,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 
 					if (!BitmapUtilities.saveJPEGToJPEG(data, imageMediaItem.getFile(),
 							mCameraConfiguration.usingFrontCamera)) {
-						UIUtilities.showToast(CameraActivity.this, R.string.save_picture_failed);
+						return false;
 					}
 
 				} else {
@@ -772,7 +771,7 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 						rawBitmap.recycle();
 					}
 					if (rawBitmap == null || !success) {
-						UIUtilities.showToast(CameraActivity.this, R.string.save_picture_failed);
+						return false;
 					}
 				}
 
@@ -782,13 +781,13 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 					runImmediateBackgroundTask(getMediaLibraryAdderRunnable(imageMediaItem.getFile().getAbsolutePath(),
 							Environment.DIRECTORY_DCIM));
 				}
+				return true;
+
 			} else {
-				UIUtilities.showToast(CameraActivity.this, R.string.save_picture_failed);
 				if (MediaPhone.DEBUG)
 					Log.d(DebugUtilities.getLogTag(this), "Save image failed: no MediaItem to save to");
 				return false;
 			}
-			return true;
 		}
 
 		protected void onPostExecute(Boolean saveSucceeded) {
@@ -814,14 +813,17 @@ public class CameraActivity extends MediaPhoneActivity implements OrientationMan
 					}
 				}
 
-				onBackPressed();
+			} else {
+				UIUtilities.showToast(CameraActivity.this, R.string.save_picture_failed);
+			}
 
-				synchronized (mSavingInProgress) {
-					mSavingInProgress = false;
-					if (mBackPressedDuringPhoto) {
-						mBackPressedDuringPhoto = false;
-						onBackPressed(); // second press doesn't really work, but don't want pressing back while saving
-					}
+			onBackPressed();
+
+			synchronized (mSavingInProgress) {
+				mSavingInProgress = false;
+				if (mBackPressedDuringPhoto) {
+					mBackPressedDuringPhoto = false;
+					onBackPressed(); // second press doesn't really work, but don't want pressing back while saving
 				}
 			}
 		}
