@@ -856,7 +856,7 @@ public abstract class MediaPhoneActivity extends FragmentActivity {
 		for (FrameItem frame : narrativeFrames) {
 			if (!frameFound && insertAtStart) {
 				frameFound = true;
-				narrativeSequenceId = frame.getNarrativeSequenceId();
+				narrativeSequenceId = 1;
 			}
 			if (frameFound) {
 				int currentNarrativeSequenceId = frame.getNarrativeSequenceId();
